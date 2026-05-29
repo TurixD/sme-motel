@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+
+# --- Secretos ---
+.env
+
+# --- Archivos de prompts/instrucciones (uso local, no van a git) ---
+prompt_inicial.txt
+prompt_fase0.txt
+
+# --- Base de datos (los datos no van a git) ---
+database/sme.db
+database/sme.db-journal
+database/sme.db-wal
+database/sme.db-shm
+
+# --- Backups (se generan localmente) ---
+backups/*
+!backups/.gitkeep
+
+# --- Logs (se generan localmente) ---
+logs/*.log
+logs/*.log.*
+!logs/.gitkeep
+
+# --- Recibos subidos (archivos del usuario) ---
+uploads/recibos/*
+!uploads/recibos/.gitkeep
+
+# --- Reportes generados ---
+reportes/
+
+# --- Editor / SO ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

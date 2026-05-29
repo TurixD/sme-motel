@@ -1,0 +1,9 @@
+# SME - Software de Manejo de Estres
+# Dependencias del proyecto (Python 3.14)
+#
+# Instalacion (cuando se indique):  pip install -r requirements.txt
+
+Flask>=3.0.0           # Framework web (servidor + plantillas)
+python-dotenv>=1.0.0   # Carga de variables sensibles desde .env
+anthropic>=0.40.0      # Cliente oficial de la API de Claude (se usa desde Fase 3)
+waitress>=3.0.0        # Servidor WSGI de produccion para Windows (autoarranque estable)
