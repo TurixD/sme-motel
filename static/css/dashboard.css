@@ -1,0 +1,218 @@
+/* =============================================================
+   dashboard.css - Layout especifico del dashboard (SPEC 5.1)
+   ============================================================= */
+
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.section-title {
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-3);
+    font-weight: 600;
+}
+
+/* --- Tarjetas grandes (3): ingresos, gastos, ganancia --- */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+}
+
+.card--accent-income .card__value  { color: var(--accent-income); }
+.card--accent-expense .card__value { color: var(--accent-expense); }
+.card--accent-net .card__value     { color: var(--text-primary); }
+
+.card__accent-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    display: inline-block;
+}
+.card--accent-income  .card__accent-dot { background: var(--accent-income); }
+.card--accent-expense .card__accent-dot { background: var(--accent-expense); }
+.card--accent-net     .card__accent-dot { background: var(--accent-fund); }
+
+/* --- Tarjetas medianas (2): fondo + resumen semana --- */
+.cards-grid--medium {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* Barra de progreso del fondo */
+.progress {
+    margin-top: var(--space-4);
+}
+.progress__track {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+.progress__fill {
+    height: 100%;
+    background: var(--accent-fund);
+    border-radius: var(--radius-full);
+    transition: width var(--transition-screen);
+}
+.progress__meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-top: var(--space-2);
+}
+
+/* Resumen de la semana (lista de filas) */
+.summary-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+.summary-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    padding: var(--space-1) 0;
+    border-bottom: 1px solid var(--border);
+}
+.summary-list li span:last-child {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+/* --- Placeholder de grafica --- */
+.chart-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 220px;
+    background:
+        repeating-linear-gradient(
+            45deg,
+            var(--bg-tertiary),
+            var(--bg-tertiary) 10px,
+            var(--bg-secondary) 10px,
+            var(--bg-secondary) 20px
+        );
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-tertiary);
+    font-size: var(--text-sm);
+}
+
+/* --- Tabla semanal de turnos --- */
+.shift-table-wrap {
+    overflow-x: auto;
+}
+.shift-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+    min-width: 640px;
+}
+.shift-table th,
+.shift-table td {
+    border: 1px solid var(--border);
+    padding: var(--space-3);
+    text-align: center;
+}
+.shift-table thead th {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+.shift-table tbody th {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    text-align: left;
+    white-space: nowrap;
+}
+/* Celda con empleado: pildora de color */
+.shift-pill {
+    display: inline-block;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+}
+.shift-pill--turi {
+    color: var(--accent-turi);
+    border-color: var(--accent-turi);
+}
+.shift-pill--employee {
+    color: var(--accent-employee);
+    border-color: var(--accent-employee);
+}
+
+/* --- Pendientes / recordatorios --- */
+.reminders {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+.reminder {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+}
+.reminder__text {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+.reminder__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--status-warning);
+    flex-shrink: 0;
+}
+.btn {
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    color: var(--bg-primary);
+    background: var(--accent-income);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: filter var(--transition-hover);
+}
+.btn:hover {
+    filter: brightness(1.08);
+}
+.btn--ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+/* --- Responsive --- */
+@media (max-width: 1024px) {
+    .cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 768px) {
+    .cards-grid,
+    .cards-grid--medium {
+        grid-template-columns: 1fr;
+    }
+    .reminder {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

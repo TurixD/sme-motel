@@ -5,10 +5,23 @@ Fase 0 / Paso 3: Flask minimo ("Hello World") en localhost:5050.
 El dashboard real llega en el Paso 5.
 """
 
-from flask import Flask
+from datetime import datetime
+
+from flask import Flask, render_template
 
 from config import Config
 from logger import get_logger, log_action, setup_logging
+
+_DIAS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+_MESES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
+
+
+def _fecha_es(dt: datetime) -> str:
+    """Fecha en espanol sin depender del locale del SO."""
+    return f"{_DIAS[dt.weekday()]}, {dt.day} de {_MESES[dt.month - 1]} {dt.year}"
 
 
 def create_app() -> Flask:
@@ -22,10 +35,10 @@ def create_app() -> Flask:
     @app.route("/")
     def index():
         log_action("Visita al dashboard (/)")
-        return (
-            "<h1>SME - Software de Manejo de Estres</h1>"
-            "<p>Flask corriendo correctamente en localhost:5050.</p>"
-            "<p>Dashboard pendiente (Paso 5).</p>"
+        return render_template(
+            "dashboard.html",
+            fecha_actual=_fecha_es(datetime.now()),
+            clima="24 C, soleado - Aguascalientes",  # placeholder estatico (API real luego)
         )
 
     return app
