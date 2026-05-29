@@ -19,7 +19,7 @@ class Config:
     SECRET_KEY = os.getenv("FLASK_SECRET_KEY") or "dev-inseguro-cambiar-en-produccion"
     ENV = os.getenv("FLASK_ENV", "development")
     HOST = os.getenv("FLASK_HOST", "0.0.0.0")
-    PORT = int(os.getenv("FLASK_PORT") or 5000)
+    PORT = int(os.getenv("FLASK_PORT") or 5050)
     DEBUG = ENV == "development"
 
     # --- Claude / Anthropic ---

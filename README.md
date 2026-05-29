@@ -54,7 +54,7 @@ copy .env.example .env        # luego rellenar los valores en .env
 python app.py
 ```
 
-Abre el navegador en `http://localhost:5000`.
+Abre el navegador en `http://localhost:5050`.
 
 ---
 
