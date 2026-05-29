@@ -45,16 +45,15 @@ ECHO [SME] Iniciando servidor en localhost:%PORT%...
 START "SME-Flask" /MIN /D "%PROJECT_DIR%" "%VENV_PYTHON%" -m waitress --listen=0.0.0.0:%PORT% --threads=%THREADS% %APP_MODULE%
 
 REM ==========================================================
-REM  2. Esperar a que el servidor responda (polling cada 1s)
+REM  2. Esperar a que el servidor responda (polling con curl)
 REM ==========================================================
 ECHO [SME] Esperando respuesta...
 :WAIT_LOOP
-    powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'http://localhost:%PORT%' -UseBasicParsing -TimeoutSec 2 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>&1
-    IF ERRORLEVEL 1 (
-        TIMEOUT /T 1 /NOBREAK >nul
-        GOTO WAIT_LOOP
-    )
+    curl -s -o nul -m 2 http://localhost:%PORT%/ && GOTO OPEN_BROWSER
+    TIMEOUT /T 1 /NOBREAK >nul
+    GOTO WAIT_LOOP
 
+:OPEN_BROWSER
 REM ==========================================================
 REM  3. Abrir Chrome maximizado en monitor secundario
 REM ==========================================================
