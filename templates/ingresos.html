@@ -1,0 +1,557 @@
+{% extends 'base.html' %}
+
+{% block title %}Ingresos — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ingresos.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">Ingresos</h1>
+    <a href="/ingresos/exportar" class="btn btn--ghost btn--sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar CSV
+    </a>
+</div>
+
+<!-- Resumen: Hoy / Semana / Mes / Año -->
+<div class="resumen-grid">
+    <div class="card resumen-card">
+        <div class="card__label">Hoy</div>
+        <div class="card__value" style="color:var(--accent-income)">{{ resumen.hoy | moneda }}</div>
+    </div>
+    <div class="card resumen-card">
+        <div class="card__label">Esta semana</div>
+        <div class="card__value">{{ resumen.semana | moneda }}</div>
+    </div>
+    <div class="card resumen-card">
+        <div class="card__label">Este mes</div>
+        <div class="card__value">{{ resumen.mes | moneda }}</div>
+    </div>
+    <div class="card resumen-card">
+        <div class="card__label">Este año</div>
+        <div class="card__value">{{ resumen.anio | moneda }}</div>
+    </div>
+</div>
+
+<!-- Formulario de registro -->
+<div class="card form-section">
+    <div class="form-header">
+        <h2 class="form-title">Registrar ingreso</h2>
+        {% if registro_hoy %}
+        <span class="badge badge--income">
+            Hoy registrado — {{ registro_hoy.total_neto | moneda }}
+        </span>
+        {% endif %}
+    </div>
+
+    <form id="form-ingreso" autocomplete="off">
+        <div class="field-group" style="max-width:200px;">
+            <label class="field-label" for="fecha">Fecha</label>
+            <input class="field-input field-input--sm" type="date"
+                   id="fecha" name="fecha" value="{{ hoy }}" max="{{ hoy }}">
+        </div>
+
+        <div class="montos-grid">
+            <div class="field-group">
+                <label class="field-label" for="monto_efectivo">Efectivo</label>
+                <div class="input-prefix">
+                    <span class="prefix-symbol">$</span>
+                    <input class="field-input" type="number"
+                           id="monto_efectivo" name="monto_efectivo"
+                           min="0" step="1" placeholder="0">
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="monto_tarjeta">Tarjeta</label>
+                <div class="input-prefix">
+                    <span class="prefix-symbol">$</span>
+                    <input class="field-input" type="number"
+                           id="monto_tarjeta" name="monto_tarjeta"
+                           min="0" step="1" placeholder="0">
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="monto_transferencia">Transferencia</label>
+                <div class="input-prefix">
+                    <span class="prefix-symbol">$</span>
+                    <input class="field-input" type="number"
+                           id="monto_transferencia" name="monto_transferencia"
+                           min="0" step="1" placeholder="0">
+                </div>
+            </div>
+        </div>
+
+        <div class="calc-row">
+            <div class="calc-item">
+                <span class="calc-label">Comisión tarjeta (4%)</span>
+                <span class="calc-value calc-value--expense" id="comision-display">$0</span>
+            </div>
+            <div class="calc-item calc-item--total">
+                <span class="calc-label">Total neto</span>
+                <span class="calc-value calc-value--income" id="total-display">$0</span>
+            </div>
+        </div>
+
+        <div class="field-group">
+            <label class="field-label" for="notas">
+                Notas <span class="field-optional">(opcional)</span>
+            </label>
+            <textarea class="field-input field-input--textarea"
+                      id="notas" name="notas" rows="2"
+                      placeholder="Observaciones del día…"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn--primary btn--full" id="btn-registrar">
+            Registrar ingreso
+        </button>
+    </form>
+</div>
+
+<!-- Gráfica: últimos 30 días -->
+<div class="card chart-section">
+    <div class="card__label">Últimos 30 días</div>
+    <div class="chart-wrap">
+        <canvas id="chart-ingresos"></canvas>
+    </div>
+</div>
+
+<!-- Historial -->
+<div class="card historial-section">
+    <div class="historial-header">
+        <h2 class="form-title">Historial</h2>
+        <form class="filter-form" method="get" action="/ingresos">
+            <input class="field-input field-input--sm" type="date"
+                   name="desde" value="{{ fecha_desde }}" title="Desde">
+            <input class="field-input field-input--sm" type="date"
+                   name="hasta" value="{{ fecha_hasta }}" title="Hasta">
+            <button type="submit" class="btn btn--secondary btn--sm">Filtrar</button>
+            {% if fecha_desde %}
+            <a href="/ingresos" class="btn btn--ghost btn--sm">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if historial %}
+    <div class="table-wrap">
+        <table class="tabla">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th class="text-right">Efectivo</th>
+                    <th class="text-right">Tarjeta</th>
+                    <th class="text-right">Transf.</th>
+                    <th class="text-right">Comisión</th>
+                    <th class="text-right">Total neto</th>
+                    <th>Notas</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reg in historial %}
+                <tr>
+                    <td class="mono">{{ reg.fecha }}</td>
+                    <td class="mono text-right">{{ reg.monto_efectivo | moneda }}</td>
+                    <td class="mono text-right">{{ reg.monto_tarjeta | moneda }}</td>
+                    <td class="mono text-right">{{ reg.monto_transferencia | moneda }}</td>
+                    <td class="mono text-right text-expense">{{ reg.comision_tarjeta | moneda }}</td>
+                    <td class="mono text-right text-income fw-600">{{ reg.total_neto | moneda }}</td>
+                    <td class="text-sm" style="color:var(--text-secondary)">{{ reg.notas or '—' }}</td>
+                    <td class="actions-cell">
+                        <button class="btn-icon"
+                                onclick="abrirEdicion({{ reg.id }})"
+                                title="Editar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-icon--danger"
+                                onclick="confirmarEliminar({{ reg.id }}, '{{ reg.fecha }}')"
+                                title="Eliminar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                <path d="M10 11v6"/><path d="M14 11v6"/>
+                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-note">No hay registros{% if fecha_desde %} en ese rango{% endif %}.</p>
+    {% endif %}
+</div>
+
+<!-- ── Modal: ya existe registro ────────────────────────── -->
+<div id="modal-existe" class="modal" role="dialog" aria-modal="true" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__box">
+        <h3 class="modal__title">Ya hay un registro para esta fecha</h3>
+        <p class="modal__body">
+            Total actual: <strong class="text-income" id="modal-total-actual">$0</strong>
+        </p>
+        <p class="modal__body text-sm" style="color:var(--text-secondary)">
+            ¿Qué deseas hacer con los nuevos montos?
+        </p>
+        <div class="modal__actions">
+            <button class="btn btn--primary"   id="btn-sumar">Sumar al existente</button>
+            <button class="btn btn--secondary" id="btn-reemplazar">Reemplazar todo</button>
+            <button class="btn btn--ghost"     id="btn-cancelar-existe">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: editar registro del historial ──────────────── -->
+<div id="modal-editar" class="modal" role="dialog" aria-modal="true" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__box">
+        <h3 class="modal__title">
+            Editar ingreso — <span id="edit-fecha-label" class="mono"></span>
+        </h3>
+        <form id="form-editar" autocomplete="off">
+            <input type="hidden" id="edit-id">
+
+            <div class="montos-grid">
+                <div class="field-group">
+                    <label class="field-label">Efectivo</label>
+                    <div class="input-prefix">
+                        <span class="prefix-symbol">$</span>
+                        <input class="field-input" type="number"
+                               id="edit-efectivo" min="0" step="1">
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Tarjeta</label>
+                    <div class="input-prefix">
+                        <span class="prefix-symbol">$</span>
+                        <input class="field-input" type="number"
+                               id="edit-tarjeta" min="0" step="1">
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Transferencia</label>
+                    <div class="input-prefix">
+                        <span class="prefix-symbol">$</span>
+                        <input class="field-input" type="number"
+                               id="edit-transferencia" min="0" step="1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="calc-row">
+                <div class="calc-item">
+                    <span class="calc-label">Comisión (4%)</span>
+                    <span class="calc-value calc-value--expense" id="edit-comision-display">$0</span>
+                </div>
+                <div class="calc-item calc-item--total">
+                    <span class="calc-label">Total neto</span>
+                    <span class="calc-value calc-value--income" id="edit-total-display">$0</span>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label">Notas</label>
+                <textarea class="field-input field-input--textarea"
+                          id="edit-notas" rows="2"></textarea>
+            </div>
+
+            <div class="modal__actions">
+                <button type="submit" class="btn btn--primary">Guardar cambios</button>
+                <button type="button" class="btn btn--ghost" id="btn-cancelar-editar">
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Contenedor de toasts -->
+<div id="toast-container" aria-live="polite"></div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+'use strict';
+
+/* ─── Datos del servidor ─────────────────────────────────── */
+const CHART_DATA = {{ chart_data | tojson }};
+const HISTORIAL  = {{ historial  | tojson }};
+
+/* ─── Utilidades ─────────────────────────────────────────── */
+function fmt(n) {
+    return '$' + Math.round(Number(n) || 0).toLocaleString('en-US');
+}
+
+function calcular(e, t, tr) {
+    const comision = t * 0.04;
+    return { comision, total: e + t + tr - comision };
+}
+
+function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `toast toast--${type}`;
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('toast--show')));
+    setTimeout(() => {
+        el.classList.remove('toast--show');
+        setTimeout(() => el.remove(), 350);
+    }, 3000);
+}
+
+function openModal(id)  { document.getElementById(id).hidden = false; document.body.style.overflow = 'hidden'; }
+function closeModal(id) { document.getElementById(id).hidden = true;  document.body.style.overflow = ''; }
+
+/* Cerrar al hacer click en el backdrop o presionar Escape */
+document.querySelectorAll('.modal__backdrop').forEach(el => {
+    el.addEventListener('click', () => closeModal(el.closest('.modal').id));
+});
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal:not([hidden])').forEach(m => closeModal(m.id));
+    }
+});
+
+/* ─── Cálculo en tiempo real — formulario principal ─────── */
+function recalcularForm() {
+    const e  = parseFloat(document.getElementById('monto_efectivo').value)      || 0;
+    const t  = parseFloat(document.getElementById('monto_tarjeta').value)       || 0;
+    const tr = parseFloat(document.getElementById('monto_transferencia').value) || 0;
+    const { comision, total } = calcular(e, t, tr);
+    document.getElementById('comision-display').textContent = fmt(comision);
+    document.getElementById('total-display').textContent    = fmt(total);
+}
+['monto_efectivo', 'monto_tarjeta', 'monto_transferencia'].forEach(id =>
+    document.getElementById(id).addEventListener('input', recalcularForm)
+);
+
+/* ─── Cálculo en tiempo real — modal editar ─────────────── */
+function recalcularEdit() {
+    const e  = parseFloat(document.getElementById('edit-efectivo').value)    || 0;
+    const t  = parseFloat(document.getElementById('edit-tarjeta').value)     || 0;
+    const tr = parseFloat(document.getElementById('edit-transferencia').value) || 0;
+    const { comision, total } = calcular(e, t, tr);
+    document.getElementById('edit-comision-display').textContent = fmt(comision);
+    document.getElementById('edit-total-display').textContent    = fmt(total);
+}
+['edit-efectivo', 'edit-tarjeta', 'edit-transferencia'].forEach(id =>
+    document.getElementById(id).addEventListener('input', recalcularEdit)
+);
+
+/* ─── Formulario principal ───────────────────────────────── */
+let pendingData = null;
+
+document.getElementById('form-ingreso').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-registrar');
+    btn.disabled = true;
+    btn.textContent = 'Registrando…';
+
+    const data = {
+        fecha:               document.getElementById('fecha').value,
+        monto_efectivo:      parseFloat(document.getElementById('monto_efectivo').value)      || 0,
+        monto_tarjeta:       parseFloat(document.getElementById('monto_tarjeta').value)       || 0,
+        monto_transferencia: parseFloat(document.getElementById('monto_transferencia').value) || 0,
+        notas: document.getElementById('notas').value.trim(),
+        modo: 'nuevo',
+    };
+
+    let res;
+    try {
+        res = await fetch('/ingresos/registrar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }).then(r => r.json());
+    } catch {
+        toast('Error de conexión', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Registrar ingreso';
+        return;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Registrar ingreso';
+
+    if (res.existe) {
+        pendingData = data;
+        document.getElementById('modal-total-actual').textContent = fmt(res.registro.total_neto);
+        openModal('modal-existe');
+        return;
+    }
+    if (res.ok) { toast('Ingreso registrado'); setTimeout(() => location.reload(), 700); }
+});
+
+/* ─── Modal "existe": sumar / reemplazar ─────────────────── */
+async function submitConModo(modo) {
+    let res;
+    try {
+        res = await fetch('/ingresos/registrar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...pendingData, modo }),
+        }).then(r => r.json());
+    } catch {
+        toast('Error de conexión', 'error');
+        return;
+    }
+    if (res.ok) {
+        const msg = modo === 'sumar'
+            ? 'Ingreso sumado al registro del día'
+            : 'Registro reemplazado';
+        toast(msg);
+        setTimeout(() => location.reload(), 700);
+    }
+}
+
+document.getElementById('btn-sumar').addEventListener('click', () => {
+    closeModal('modal-existe');
+    submitConModo('sumar');
+});
+document.getElementById('btn-reemplazar').addEventListener('click', () => {
+    closeModal('modal-existe');
+    submitConModo('reemplazar');
+});
+document.getElementById('btn-cancelar-existe').addEventListener('click', () =>
+    closeModal('modal-existe')
+);
+
+/* ─── Modal "editar" ─────────────────────────────────────── */
+function abrirEdicion(id) {
+    const reg = HISTORIAL.find(r => r.id === id);
+    if (!reg) return;
+    document.getElementById('edit-id').value               = id;
+    document.getElementById('edit-fecha-label').textContent = reg.fecha;
+    document.getElementById('edit-efectivo').value         = reg.monto_efectivo;
+    document.getElementById('edit-tarjeta').value          = reg.monto_tarjeta;
+    document.getElementById('edit-transferencia').value    = reg.monto_transferencia;
+    document.getElementById('edit-notas').value            = reg.notas || '';
+    recalcularEdit();
+    openModal('modal-editar');
+}
+
+document.getElementById('btn-cancelar-editar').addEventListener('click', () =>
+    closeModal('modal-editar')
+);
+
+document.getElementById('form-editar').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id   = document.getElementById('edit-id').value;
+    const data = {
+        monto_efectivo:      parseFloat(document.getElementById('edit-efectivo').value)    || 0,
+        monto_tarjeta:       parseFloat(document.getElementById('edit-tarjeta').value)     || 0,
+        monto_transferencia: parseFloat(document.getElementById('edit-transferencia').value) || 0,
+        notas: document.getElementById('edit-notas').value.trim(),
+    };
+    let res;
+    try {
+        res = await fetch(`/ingresos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }).then(r => r.json());
+    } catch {
+        toast('Error de conexión', 'error');
+        return;
+    }
+    if (res.ok) {
+        closeModal('modal-editar');
+        toast('Registro actualizado');
+        setTimeout(() => location.reload(), 700);
+    } else {
+        toast(res.error || 'Error al guardar', 'error');
+    }
+});
+
+/* ─── Eliminar ───────────────────────────────────────────── */
+async function confirmarEliminar(id, fecha) {
+    if (!confirm(`¿Eliminar el registro del ${fecha}?\nEsta acción no se puede deshacer.`)) return;
+    let res;
+    try {
+        res = await fetch(`/ingresos/${id}`, { method: 'DELETE' }).then(r => r.json());
+    } catch {
+        toast('Error de conexión', 'error');
+        return;
+    }
+    if (res.ok) { toast('Registro eliminado'); setTimeout(() => location.reload(), 700); }
+    else { toast(res.error || 'Error al eliminar', 'error'); }
+}
+
+/* ─── Gráfica Chart.js ───────────────────────────────────── */
+(function initChart() {
+    const ctx = document.getElementById('chart-ingresos').getContext('2d');
+
+    /* Construir rango completo de 30 días (rellenar días sin datos con 0) */
+    const dataMap = {};
+    CHART_DATA.forEach(d => { dataMap[d.fecha] = d.total; });
+
+    const labels = [], values = [];
+    for (let i = 29; i >= 0; i--) {
+        const d  = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        const mm  = String(d.getMonth() + 1).padStart(2, '0');
+        const dd  = String(d.getDate()).padStart(2, '0');
+        labels.push(`${mm}/${dd}`);
+        values.push(dataMap[key] || 0);
+    }
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: 'rgba(94,232,180,0.18)',
+                borderColor: '#5EE8B4',
+                borderWidth: 1.5,
+                borderRadius: 3,
+                hoverBackgroundColor: 'rgba(94,232,180,0.32)',
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: { label: ctx => fmt(ctx.raw) },
+                    backgroundColor: '#1A1A22',
+                    borderColor: '#2A2A35',
+                    borderWidth: 1,
+                    titleColor: '#9A9AA8',
+                    bodyColor: '#5EE8B4',
+                    padding: 10,
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: '#2A2A35', drawTicks: false },
+                    ticks: { color: '#6A6A78', font: { size: 10, family: "'JetBrains Mono', monospace" } },
+                    border: { color: '#2A2A35' },
+                },
+                y: {
+                    grid: { color: '#2A2A35' },
+                    ticks: {
+                        color: '#6A6A78',
+                        font: { size: 10, family: "'JetBrains Mono', monospace" },
+                        callback: val => val >= 1000 ? '$' + (val / 1000).toFixed(0) + 'k' : '$' + val,
+                    },
+                    border: { color: '#2A2A35' },
+                },
+            },
+        },
+    });
+})();
+</script>
+{% endblock %}

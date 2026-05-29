@@ -11,6 +11,7 @@ from flask import Flask, render_template
 
 from config import Config
 from logger import get_logger, log_action, setup_logging
+from modules.ingresos import ingresos_bp
 
 _DIAS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
 _MESES = [
@@ -32,14 +33,29 @@ def create_app() -> Flask:
     log = get_logger()
     log.info("SME iniciado (puerto %s, debug=%s)", Config.PORT, Config.DEBUG)
 
+    # --- Blueprints ---
+    app.register_blueprint(ingresos_bp)
+
+    # --- Filtro de moneda ($1,234) ---
+    @app.template_filter("moneda")
+    def moneda_filter(value):
+        try:
+            return f"${float(value or 0):,.0f}"
+        except (TypeError, ValueError):
+            return "$0"
+
+    # --- Variables globales de template ---
+    @app.context_processor
+    def inject_globals():
+        return {
+            "fecha_actual": _fecha_es(datetime.now()),
+            "clima": "24 °C, soleado — Aguascalientes",
+        }
+
     @app.route("/")
     def index():
         log_action("Visita al dashboard (/)")
-        return render_template(
-            "dashboard.html",
-            fecha_actual=_fecha_es(datetime.now()),
-            clima="24 C, soleado - Aguascalientes",  # placeholder estatico (API real luego)
-        )
+        return render_template("dashboard.html")
 
     return app
 
