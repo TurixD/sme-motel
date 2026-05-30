@@ -1242,6 +1242,14 @@ Discreto, profesional, contemporáneo. Como un Linear o Notion para tu motel.
 - Preparar sistema para soportar ambos modos
 - Toggle en configuración
 
+### 9.10 Análisis de patrones de ocupación
+- Heatmap día/hora de ingresos
+- Comparativas por día de la semana
+- Detección de tendencias semanales/mensuales
+- Identificación de patrones (días fuertes, días flojos)
+- Implementar después de Fase 4, cuando haya 3+ meses de datos reales para que los patrones tengan significado
+- Add-on visual de Fase 7; el asistente conversacional de Fase 4 ya cubre el caso de uso conversacional ("¿cuál fue mi mejor día?"), esto sería la versión visual con dashboards dedicados
+
 ---
 
 ## Notas finales
