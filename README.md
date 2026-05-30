@@ -83,11 +83,39 @@ sme-motel/
 
 El proyecto se desarrolla en **7 fases incrementales** (ver [`SPEC.md` §7](SPEC.md#7-plan-de-desarrollo-por-fases)).
 
-- [ ] **Fase 0 — Cimientos** _(en curso)_
-- [ ] Fase 1 — Operación básica
+- [x] **Fase 0 — Cimientos**
+- [ ] **Fase 1 — Operación básica** _(en curso)_
 - [ ] Fase 2 — Fondos y reportes
 - [ ] Fase 3 — IA básica
 - [ ] Fase 4 — Asistente conversacional
 - [ ] Fase 5 — Inventario inteligente
 - [ ] Fase 6 — Pulido y mascota (GERTY-MOTEL)
 - [ ] Fase 7 — Iteración continua
+
+---
+
+## Convenciones de código
+
+### Frontend — atributos `onclick` inline
+
+**Regla:** nunca pasar strings de datos como literales entre comillas simples en atributos HTML inline (`onclick`, `onchange`, etc.).
+
+```html
+<!-- ❌ MAL — se rompe si el dato contiene apóstrofes (ej. "Sam's") -->
+<button onclick="eliminar({{ id }}, '{{ nombre }}')">
+
+<!-- ✅ BIEN — pasar solo el ID y buscar el registro en el array en memoria -->
+<button onclick="eliminar({{ id }})">
+```
+
+```javascript
+// En el JS, buscar el registro completo por ID:
+function eliminar(id) {
+    const reg = DATA.find(r => r.id === id);
+    // usar reg.nombre, reg.categoria, etc.
+}
+```
+
+**Por qué:** categorías (`Sam's`), nombres de empleados o descripciones pueden contener apóstrofes u otros caracteres que rompen la sintaxis de JavaScript dentro del atributo HTML, causando que el handler falle silenciosamente sin error en consola.
+
+**Aplica a:** cualquier campo de texto libre o categoría con nombre predefinido que pueda contener `'`, `"`, `\`, saltos de línea, u otros caracteres especiales.
