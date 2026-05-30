@@ -1,0 +1,440 @@
+{% extends 'base.html' %}
+
+{% block title %}Gastos — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/gastos.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">Gastos</h1>
+    <a href="/gastos/exportar" class="btn btn--ghost btn--sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar CSV
+    </a>
+</div>
+
+<!-- Alertas de gasto anormal -->
+{% if alertas %}
+<div class="alertas-section">
+    {% for a in alertas %}
+    <div class="alert-banner">
+        <svg class="alert-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="alert-text">
+            <strong>{{ a.categoria }}</strong> este mes: {{ a.total_mes | moneda }}
+            — {{ a.pct_arriba }}% arriba del promedio mensual ({{ a.promedio | moneda }}/mes)
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Resumen: Hoy / Semana / Mes / Año -->
+<div class="resumen-grid">
+    <div class="card resumen-card">
+        <div class="card__label">Hoy</div>
+        <div class="card__value" style="color:var(--accent-expense)">{{ resumen.hoy | moneda }}</div>
+    </div>
+    <div class="card resumen-card">
+        <div class="card__label">Esta semana</div>
+        <div class="card__value">{{ resumen.semana | moneda }}</div>
+    </div>
+    <div class="card resumen-card">
+        <div class="card__label">Este mes</div>
+        <div class="card__value">{{ resumen.mes | moneda }}</div>
+    </div>
+    <div class="card resumen-card">
+        <div class="card__label">Este año</div>
+        <div class="card__value">{{ resumen.anio | moneda }}</div>
+    </div>
+</div>
+
+<!-- Formulario de registro -->
+<div class="card form-section">
+    <h2 class="form-title" style="margin-bottom:var(--space-6)">Registrar gasto</h2>
+    <form id="form-gasto" autocomplete="off">
+        <div class="form-row-2">
+            <div class="field-group">
+                <label class="field-label" for="fecha">Fecha</label>
+                <input class="field-input field-input--sm" type="date"
+                       id="fecha" name="fecha" value="{{ hoy }}" max="{{ hoy }}">
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="categoria">Categoría</label>
+                <select class="field-input field-input--sm" id="categoria" name="categoria">
+                    <option value="">— Seleccionar —</option>
+                    {% for cat in categorias %}
+                    <option value="{{ cat }}">{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="monto">Monto</label>
+            <div class="input-prefix" style="max-width:220px">
+                <span class="prefix-symbol">$</span>
+                <input class="field-input" type="number"
+                       id="monto" name="monto" min="0" step="any" placeholder="0">
+            </div>
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="descripcion">
+                Descripción <span class="field-optional">(opcional)</span>
+            </label>
+            <textarea class="field-input field-input--textarea"
+                      id="descripcion" name="descripcion" rows="2"
+                      placeholder="Detalle del gasto…"></textarea>
+        </div>
+        <button type="submit" class="btn btn--expense btn--full" id="btn-registrar">
+            Registrar gasto
+        </button>
+    </form>
+</div>
+
+<!-- Gráfica: gastos por categoría este mes -->
+<div class="card chart-section">
+    <div class="card__label">Por categoría — este mes</div>
+    {% if chart_data %}
+    <div class="chart-donut-wrap">
+        <canvas id="chart-gastos"></canvas>
+    </div>
+    {% else %}
+    <p class="empty-note" style="margin-top:var(--space-4)">Sin gastos registrados este mes.</p>
+    {% endif %}
+</div>
+
+<!-- Historial -->
+<div class="card historial-section">
+    <div class="historial-header">
+        <h2 class="form-title">Historial</h2>
+        <form class="filter-form" method="get" action="/gastos">
+            <input class="field-input field-input--sm" type="date"
+                   name="desde" value="{{ fecha_desde }}" title="Desde">
+            <input class="field-input field-input--sm" type="date"
+                   name="hasta" value="{{ fecha_hasta }}" title="Hasta">
+            <select class="field-input field-input--sm" name="categoria" style="width:auto">
+                <option value="">Todas las categorías</option>
+                {% for cat in categorias %}
+                <option value="{{ cat }}" {{ 'selected' if cat_filtro == cat }}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn--secondary btn--sm">Filtrar</button>
+            {% if fecha_desde or cat_filtro %}
+            <a href="/gastos" class="btn btn--ghost btn--sm">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if historial %}
+    <div class="table-wrap">
+        <table class="tabla">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Categoría</th>
+                    <th class="text-right">Monto</th>
+                    <th>Descripción</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in historial %}
+                <tr>
+                    <td class="mono">{{ g.fecha }}</td>
+                    <td><span class="cat-pill" data-cat="{{ g.categoria }}">{{ g.categoria }}</span></td>
+                    <td class="mono text-right text-expense fw-600">{{ g.monto | moneda }}</td>
+                    <td class="text-sm" style="color:var(--text-secondary)">{{ g.descripcion or '—' }}</td>
+                    <td class="actions-cell">
+                        <button class="btn-icon" onclick="abrirEdicion({{ g.id }})" title="Editar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-icon--danger"
+                                onclick="confirmarEliminar({{ g.id }})"
+                                title="Eliminar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                <path d="M10 11v6"/><path d="M14 11v6"/>
+                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-note">No hay registros{% if fecha_desde or cat_filtro %} con ese filtro{% endif %}.</p>
+    {% endif %}
+</div>
+
+<!-- Modal: editar gasto -->
+<div id="modal-editar" class="modal" role="dialog" aria-modal="true" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__box">
+        <h3 class="modal__title">Editar gasto</h3>
+        <form id="form-editar" autocomplete="off">
+            <input type="hidden" id="edit-id">
+            <div class="form-row-2">
+                <div class="field-group">
+                    <label class="field-label">Fecha</label>
+                    <input class="field-input field-input--sm" type="date" id="edit-fecha">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Categoría</label>
+                    <select class="field-input field-input--sm" id="edit-categoria">
+                        {% for cat in categorias %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Monto</label>
+                <div class="input-prefix">
+                    <span class="prefix-symbol">$</span>
+                    <input class="field-input" type="number" id="edit-monto" min="0" step="any">
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Descripción</label>
+                <textarea class="field-input field-input--textarea" id="edit-descripcion" rows="2"></textarea>
+            </div>
+            <div class="modal__actions">
+                <button type="submit" class="btn btn--expense">Guardar cambios</button>
+                <button type="button" class="btn btn--ghost" id="btn-cancelar-editar">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toasts -->
+<div id="toast-container" aria-live="polite"></div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+'use strict';
+
+const CHART_DATA = {{ chart_data | tojson }};
+const HISTORIAL  = {{ historial  | tojson }};
+const CATEGORIAS = {{ categorias | tojson }};
+
+/* ─── Colores por categoría (de la paleta del SPEC) ─────── */
+const CAT_COLORS = {
+    'Gas':              '#FFB84D',
+    'Luz':              '#22C55E',
+    'Agua-Pipas':       '#7BB8FF',
+    'Agua-Embotellada': '#5EE8B4',
+    'Mantenimiento':    '#A78BFA',
+    "Sam's":            '#FF7A8A',
+    'StarTV':           '#C084FC',
+    'Otro':             '#6A6A78',
+};
+
+/* ─── Colorear pills de categoría en la tabla ───────────── */
+document.querySelectorAll('.cat-pill').forEach(el => {
+    const color = CAT_COLORS[el.dataset.cat] || '#9A9AA8';
+    el.style.background   = color + '1A';
+    el.style.color        = color;
+    el.style.border       = `1px solid ${color}40`;
+    el.style.borderRadius = '4px';
+    el.style.padding      = '2px 8px';
+    el.style.fontSize     = '0.8rem';
+    el.style.fontWeight   = '500';
+    el.style.whiteSpace   = 'nowrap';
+});
+
+/* ─── Utilidades ─────────────────────────────────────────── */
+function fmt(n) {
+    return '$' + Math.round(Number(n) || 0).toLocaleString('en-US');
+}
+
+function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `toast toast--${type}`;
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('toast--show')));
+    setTimeout(() => {
+        el.classList.remove('toast--show');
+        setTimeout(() => el.remove(), 350);
+    }, 3000);
+}
+
+function openModal(id)  { document.getElementById(id).hidden = false; document.body.style.overflow = 'hidden'; }
+function closeModal(id) { document.getElementById(id).hidden = true;  document.body.style.overflow = ''; }
+
+document.querySelectorAll('.modal__backdrop').forEach(el =>
+    el.addEventListener('click', () => closeModal(el.closest('.modal').id))
+);
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape')
+        document.querySelectorAll('.modal:not([hidden])').forEach(m => closeModal(m.id));
+});
+
+/* ─── Formulario principal ───────────────────────────────── */
+document.getElementById('form-gasto').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-registrar');
+    btn.disabled = true;
+    btn.textContent = 'Registrando…';
+
+    const data = {
+        fecha:       document.getElementById('fecha').value,
+        categoria:   document.getElementById('categoria').value,
+        monto:       parseFloat(document.getElementById('monto').value) || 0,
+        descripcion: document.getElementById('descripcion').value.trim(),
+    };
+
+    if (!data.categoria) {
+        toast('Selecciona una categoría', 'error');
+        btn.disabled = false; btn.textContent = 'Registrar gasto';
+        return;
+    }
+
+    let res;
+    try {
+        res = await fetch('/gastos/registrar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }).then(r => r.json());
+    } catch {
+        toast('Error de conexión', 'error');
+        btn.disabled = false; btn.textContent = 'Registrar gasto';
+        return;
+    }
+
+    btn.disabled = false; btn.textContent = 'Registrar gasto';
+
+    if (res.error) { toast(res.error, 'error'); return; }
+    if (res.ok) { toast('Gasto registrado'); setTimeout(() => location.reload(), 700); }
+});
+
+/* ─── Modal editar ───────────────────────────────────────── */
+function abrirEdicion(id) {
+    const g = HISTORIAL.find(r => r.id === id);
+    if (!g) return;
+    document.getElementById('edit-id').value          = id;
+    document.getElementById('edit-fecha').value       = g.fecha;
+    document.getElementById('edit-categoria').value   = g.categoria;
+    document.getElementById('edit-monto').value       = g.monto;
+    document.getElementById('edit-descripcion').value = g.descripcion || '';
+    openModal('modal-editar');
+}
+
+document.getElementById('btn-cancelar-editar').addEventListener('click', () =>
+    closeModal('modal-editar')
+);
+
+document.getElementById('form-editar').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id   = document.getElementById('edit-id').value;
+    const data = {
+        fecha:       document.getElementById('edit-fecha').value,
+        categoria:   document.getElementById('edit-categoria').value,
+        monto:       parseFloat(document.getElementById('edit-monto').value) || 0,
+        descripcion: document.getElementById('edit-descripcion').value.trim(),
+    };
+    let res;
+    try {
+        res = await fetch(`/gastos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }).then(r => r.json());
+    } catch {
+        toast('Error de conexión', 'error'); return;
+    }
+    if (res.ok) {
+        closeModal('modal-editar');
+        toast('Gasto actualizado');
+        setTimeout(() => location.reload(), 700);
+    } else {
+        toast(res.error || 'Error al guardar', 'error');
+    }
+});
+
+/* ─── Eliminar ───────────────────────────────────────────── */
+async function confirmarEliminar(id) {
+    const g = HISTORIAL.find(r => r.id === id);
+    const label = g ? `${g.categoria} del ${g.fecha}` : `#${id}`;
+    if (!confirm(`¿Eliminar el gasto de ${label}?\nEsta acción no se puede deshacer.`)) return;
+    let res;
+    try {
+        res = await fetch(`/gastos/${id}`, { method: 'DELETE' }).then(r => r.json());
+    } catch {
+        toast('Error de conexión', 'error'); return;
+    }
+    if (res.ok) { toast('Gasto eliminado'); setTimeout(() => location.reload(), 700); }
+    else { toast(res.error || 'Error al eliminar', 'error'); }
+}
+
+/* ─── Gráfica doughnut ───────────────────────────────────── */
+{% if chart_data %}
+(function initChart() {
+    const ctx    = document.getElementById('chart-gastos').getContext('2d');
+    const labels = CHART_DATA.map(d => d.categoria);
+    const values = CHART_DATA.map(d => d.total);
+    const total  = values.reduce((a, b) => a + b, 0);
+    const bgs    = CHART_DATA.map(d => (CAT_COLORS[d.categoria] || '#9A9AA8') + '55');
+    const borders = CHART_DATA.map(d =>  CAT_COLORS[d.categoria] || '#9A9AA8');
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: bgs,
+                borderColor: borders,
+                borderWidth: 1.5,
+                hoverOffset: 6,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '62%',
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        color: '#9A9AA8',
+                        font: { size: 12, family: "'Inter', sans-serif" },
+                        padding: 14,
+                        usePointStyle: true,
+                        pointStyleWidth: 8,
+                    },
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const pct = total > 0 ? Math.round(ctx.raw / total * 100) : 0;
+                            return ` ${fmt(ctx.raw)}  (${pct}%)`;
+                        },
+                    },
+                    backgroundColor: '#1A1A22',
+                    borderColor: '#2A2A35',
+                    borderWidth: 1,
+                    titleColor: '#9A9AA8',
+                    bodyColor: '#E8E8EE',
+                    padding: 10,
+                },
+            },
+        },
+    });
+})();
+{% endif %}
+</script>
+{% endblock %}

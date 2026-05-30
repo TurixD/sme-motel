@@ -11,6 +11,7 @@ from flask import Flask, render_template
 
 from config import Config
 from logger import get_logger, log_action, setup_logging
+from modules.gastos import gastos_bp
 from modules.ingresos import ingresos_bp
 
 _DIAS = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
@@ -35,6 +36,7 @@ def create_app() -> Flask:
 
     # --- Blueprints ---
     app.register_blueprint(ingresos_bp)
+    app.register_blueprint(gastos_bp)
 
     # --- Filtro de moneda ($1,234) ---
     @app.template_filter("moneda")
