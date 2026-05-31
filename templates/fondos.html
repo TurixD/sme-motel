@@ -1,0 +1,498 @@
+{% extends 'base.html' %}
+
+{% block title %}Fondos — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fondos.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">Fondos</h1>
+</div>
+
+<!-- ── Aportes pendientes de la semana ───────────────────────── -->
+{% if aportes_pendientes %}
+<section class="aportes-banner" id="aportes-banner">
+    <div class="section-title">Aportes pendientes de la semana</div>
+    <div class="aportes-list">
+        {% for ap in aportes_pendientes %}
+        <div class="aporte-card" id="aporte-card-{{ ap.id }}">
+            <div class="aporte-card__info">
+                <span class="fondo-dot" style="background:{{ ap.color }}"></span>
+                <div>
+                    <div class="aporte-card__nombre">{{ ap.nombre }}</div>
+                    <div class="aporte-card__saldo">Saldo actual: {{ ap.saldo_display }}</div>
+                </div>
+            </div>
+            <div class="aporte-card__control">
+                <div class="input-prefix" style="width:150px">
+                    <span class="prefix-symbol">$</span>
+                    <input class="field-input field-input--sm mono" type="number"
+                           id="aporte-monto-{{ ap.id }}"
+                           min="0.01" step="any"
+                           value="{{ ap.aporte_periodico or '' }}">
+                </div>
+                <button class="btn btn--fund btn--sm" id="btn-confirmar-aporte-{{ ap.id }}">Confirmar</button>
+                <button class="btn btn--ghost btn--sm" id="btn-saltar-aporte-{{ ap.id }}">Saltar</button>
+            </div>
+            <div class="aporte-card__razon" id="aporte-razon-{{ ap.id }}" hidden>
+                <input class="field-input field-input--sm" type="text"
+                       id="input-razon-{{ ap.id }}" placeholder="Razón (opcional)">
+                <button class="btn btn--ghost btn--sm" id="btn-confirmar-salto-{{ ap.id }}">Confirmar salto</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<!-- ── Lista de fondos ───────────────────────────────────────── -->
+<div class="fondos-list">
+    {% for f in fondos %}
+    <div class="fondo-card {% if f.saldo_negativo %}fondo-card--negativo{% endif %}"
+         id="fondo-card-{{ f.id }}">
+
+        <!-- Header: nombre + saldo -->
+        <div class="fondo-card__header">
+            <div class="fondo-card__title">
+                <span class="fondo-dot" style="background:{{ f.color }}"></span>
+                <span class="fondo-nombre">{{ f.nombre }}</span>
+                {% if f.saldo_negativo %}
+                <span class="badge-negativo">⚠ Saldo negativo</span>
+                {% endif %}
+            </div>
+            <div class="fondo-saldo {% if f.saldo_negativo %}fondo-saldo--negativo{% endif %}"
+                 id="saldo-{{ f.id }}">
+                {{ f.saldo_display }}
+            </div>
+        </div>
+
+        <!-- Barra de progreso (solo si hay meta) -->
+        {% if f.meta_mensual %}
+        <div class="fondo-progress">
+            <div class="fondo-progress__bar">
+                <div class="fondo-progress__fill"
+                     id="progreso-{{ f.id }}"
+                     style="width:{{ f.progreso_pct }}%;background:{{ f.color }}"></div>
+            </div>
+            <span class="fondo-progress__label">
+                {{ f.progreso_pct }}% de {{ f.meta_mensual | moneda }}/mes
+            </span>
+        </div>
+        {% endif %}
+
+        <!-- Stats -->
+        <div class="fondo-stats">
+            <div class="fondo-stat">
+                <span class="fondo-stat__label">Total depositado</span>
+                <span class="fondo-stat__value text-income">{{ f.total_dep | moneda }}</span>
+            </div>
+            <div class="fondo-stat">
+                <span class="fondo-stat__label">Total retirado</span>
+                <span class="fondo-stat__value text-expense">{{ f.total_ret | moneda }}</span>
+            </div>
+            <div class="fondo-stat">
+                <span class="fondo-stat__label">Aporte {{ f.frecuencia_aporte or '' }}</span>
+                <span class="fondo-stat__value">{{ f.aporte_periodico | moneda }}</span>
+            </div>
+            <div class="fondo-stat">
+                <span class="fondo-stat__label">Metas logradas</span>
+                <span class="fondo-stat__value">
+                    {% if f.meses_totales > 0 %}
+                        {{ f.meses_logrados }}/{{ f.meses_totales }} meses
+                    {% else %}
+                        <span class="text-tertiary">Sin historial</span>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Botones -->
+        <div class="fondo-actions">
+            <button class="btn btn--fund btn--sm" id="btn-depositar-{{ f.id }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                Depósito
+            </button>
+            <button class="btn btn--ghost btn--sm" id="btn-retirar-{{ f.id }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                Retiro
+            </button>
+            <button class="btn btn--ghost btn--sm" id="btn-movs-{{ f.id }}">
+                Movimientos ({{ f.movimientos | length }})
+            </button>
+        </div>
+
+        <!-- Movimientos recientes (ocultos por defecto) -->
+        <div class="fondo-movs" id="movs-{{ f.id }}" hidden>
+            {% if f.movimientos %}
+            <div class="table-wrap">
+                <table class="tabla">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Concepto</th>
+                            <th class="text-right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for m in f.movimientos %}
+                        <tr>
+                            <td class="text-mono text-sm text-secondary">{{ m.fecha }}</td>
+                            <td>
+                                <span class="mov-badge mov-badge--{{ m.tipo }}">
+                                    {% if m.tipo == 'deposito' %}Depósito
+                                    {% elif m.tipo == 'retiro' %}Retiro
+                                    {% else %}Saltado{% endif %}
+                                </span>
+                            </td>
+                            <td class="text-secondary text-sm">{{ m.concepto or '—' }}</td>
+                            <td class="text-right text-mono fw-600
+                                {% if m.tipo == 'deposito' %}text-income
+                                {% elif m.tipo == 'retiro' %}text-expense
+                                {% else %}text-tertiary{% endif %}">
+                                {% if m.tipo == 'deposito' %}+{{ m.monto | moneda }}
+                                {% elif m.tipo == 'retiro' %}-{{ m.monto | moneda }}
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-note">Sin movimientos aún.</p>
+            {% endif %}
+        </div>
+
+    </div>
+    {% else %}
+    <p class="empty-note">No hay fondos activos.</p>
+    {% endfor %}
+</div>
+
+<!-- ── Modal depósito / retiro ───────────────────────────────── -->
+<div class="modal" id="modal-movimiento" hidden>
+    <div class="modal__backdrop" id="modal-backdrop"></div>
+    <div class="modal__box">
+        <h2 class="modal__title" id="modal-titulo">Depósito</h2>
+
+        <div class="field-group">
+            <label class="field-label" for="mov-fecha">Fecha</label>
+            <input class="field-input" type="date" id="mov-fecha" value="{{ hoy }}">
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="mov-monto">Monto</label>
+            <div class="input-prefix">
+                <span class="prefix-symbol">$</span>
+                <input class="field-input mono" type="number" id="mov-monto"
+                       min="0.01" step="any" placeholder="0">
+            </div>
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="mov-concepto">
+                Concepto <span class="field-optional">(opcional)</span>
+            </label>
+            <input class="field-input" type="text" id="mov-concepto" placeholder="...">
+        </div>
+
+        <div class="mov-warning" id="mov-warning" hidden>
+            ⚠ El saldo quedaría en <strong id="mov-saldo-proyectado"></strong>
+        </div>
+
+        <div class="modal__actions">
+            <button class="btn btn--fund" id="btn-modal-guardar">Guardar</button>
+            <button class="btn btn--ghost" id="btn-modal-cancelar">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+var FONDOS_DATA = {{ fondos | tojson }};
+var APORTES_DATA = {{ aportes_pendientes | tojson }};
+
+(function () {
+
+    // ── Utilidades ────────────────────────────────────────────
+
+    function formatMoneda(n) {
+        if (n == null) return '$0';
+        var sign = n < 0 ? '-' : '';
+        return sign + '$' + Math.abs(n).toLocaleString('es-MX', { maximumFractionDigits: 0 });
+    }
+
+    function showToast(msg, type) {
+        var container = document.getElementById('toast-container');
+        var toast = document.createElement('div');
+        toast.className = 'toast toast--' + type;
+        toast.textContent = msg;
+        container.appendChild(toast);
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () { toast.classList.add('toast--show'); });
+        });
+        setTimeout(function () {
+            toast.classList.remove('toast--show');
+            toast.addEventListener('transitionend', function () { toast.remove(); }, { once: true });
+        }, 3500);
+    }
+
+    function getFondoById(id) {
+        return FONDOS_DATA.find(function (f) { return f.id === id; }) || null;
+    }
+
+    // ── Actualizar saldo en tarjeta ───────────────────────────
+
+    function updateSaldo(fondoId, saldo, saldoDisplay, esNegativo) {
+        var elSaldo = document.getElementById('saldo-' + fondoId);
+        if (elSaldo) {
+            elSaldo.textContent = saldoDisplay || formatMoneda(saldo);
+            elSaldo.classList.toggle('fondo-saldo--negativo', !!esNegativo);
+        }
+        var card = document.getElementById('fondo-card-' + fondoId);
+        if (card) card.classList.toggle('fondo-card--negativo', !!esNegativo);
+        // Sync local data
+        var f = getFondoById(fondoId);
+        if (f) { f.saldo = saldo; f.saldo_negativo = !!esNegativo; }
+    }
+
+    // ── Movimientos toggle (siempre fetch fresco) ────────────
+
+    function tipoLabel(tipo) {
+        return tipo === 'deposito' ? 'Depósito' : tipo === 'retiro' ? 'Retiro' : 'Saltado';
+    }
+    function tipoMontoHtml(m) {
+        var n = Math.abs(m.monto).toLocaleString('es-MX', { maximumFractionDigits: 0 });
+        if (m.tipo === 'deposito') return '<span class="text-income">+$' + n + '</span>';
+        if (m.tipo === 'retiro')   return '<span class="text-expense">-$' + n + '</span>';
+        return '<span class="text-tertiary">—</span>';
+    }
+
+    function renderMovsPanel(movs) {
+        if (!movs || movs.length === 0) {
+            return '<p class="empty-note">Sin movimientos aún.</p>';
+        }
+        var rows = movs.map(function (m) {
+            return '<tr>'
+                + '<td class="text-mono text-sm text-secondary">' + m.fecha + '</td>'
+                + '<td><span class="mov-badge mov-badge--' + m.tipo + '">' + tipoLabel(m.tipo) + '</span></td>'
+                + '<td class="text-secondary text-sm">' + (m.concepto || '—') + '</td>'
+                + '<td class="text-right text-mono fw-600">' + tipoMontoHtml(m) + '</td>'
+                + '</tr>';
+        }).join('');
+        return '<div class="table-wrap"><table class="tabla">'
+            + '<thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th>'
+            + '<th class="text-right">Monto</th></tr></thead>'
+            + '<tbody>' + rows + '</tbody></table></div>';
+    }
+
+    function refreshMovsBtn(fondoId, count) {
+        var btn = document.getElementById('btn-movs-' + fondoId);
+        if (btn && !btn.textContent.startsWith('Ocultar')) {
+            btn.textContent = 'Movimientos (' + count + ')';
+        }
+    }
+
+    FONDOS_DATA.forEach(function (f) {
+        var btn   = document.getElementById('btn-movs-' + f.id);
+        var panel = document.getElementById('movs-' + f.id);
+        if (!btn || !panel) return;
+
+        btn.addEventListener('click', function () {
+            if (!panel.hasAttribute('hidden')) {
+                panel.setAttribute('hidden', '');
+                btn.textContent = 'Movimientos (' + (btn.dataset.count || '?') + ')';
+                return;
+            }
+            btn.textContent = 'Cargando…';
+            fetch('/fondos/' + f.id + '/movimientos')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                panel.innerHTML = renderMovsPanel(data.movimientos);
+                panel.removeAttribute('hidden');
+                btn.dataset.count = data.count;
+                btn.textContent = 'Ocultar movimientos';
+            })
+            .catch(function () {
+                panel.innerHTML = '<p class="empty-note">Error al cargar movimientos.</p>';
+                panel.removeAttribute('hidden');
+                btn.textContent = 'Ocultar movimientos';
+            });
+        });
+    });
+
+    // ── Modal depósito / retiro ───────────────────────────────
+
+    var modalState = { tipo: null, fondoId: null };
+    var modal      = document.getElementById('modal-movimiento');
+
+    function openModal(tipo, fondoId) {
+        var f = getFondoById(fondoId);
+        if (!f) return;
+
+        modalState.tipo    = tipo;
+        modalState.fondoId = fondoId;
+
+        var titulo = tipo === 'depositar'
+            ? 'Depósito — ' + f.nombre
+            : 'Retiro — '   + f.nombre;
+        document.getElementById('modal-titulo').textContent = titulo;
+        document.getElementById('mov-fecha').value    = '{{ hoy }}';
+        document.getElementById('mov-monto').value    = '';
+        document.getElementById('mov-concepto').value = '';
+        document.getElementById('mov-warning').setAttribute('hidden', '');
+
+        var btnGuardar = document.getElementById('btn-modal-guardar');
+        if (tipo === 'depositar') {
+            btnGuardar.className = 'btn btn--fund';
+            btnGuardar.textContent = 'Guardar depósito';
+        } else {
+            btnGuardar.className = 'btn btn--expense';
+            btnGuardar.textContent = 'Guardar retiro';
+        }
+
+        modal.removeAttribute('hidden');
+        setTimeout(function () { document.getElementById('mov-monto').focus(); }, 50);
+    }
+
+    function closeModal() {
+        modal.setAttribute('hidden', '');
+    }
+
+    FONDOS_DATA.forEach(function (f) {
+        var btnDep = document.getElementById('btn-depositar-' + f.id);
+        var btnRet = document.getElementById('btn-retirar-'   + f.id);
+        if (btnDep) btnDep.addEventListener('click', function () { openModal('depositar', f.id); });
+        if (btnRet) btnRet.addEventListener('click', function () { openModal('retirar',   f.id); });
+    });
+
+    document.getElementById('btn-modal-cancelar').addEventListener('click', closeModal);
+    document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+
+    // Preview saldo negativo en retiro
+    document.getElementById('mov-monto').addEventListener('input', function () {
+        if (modalState.tipo !== 'retirar') return;
+        var f = getFondoById(modalState.fondoId);
+        if (!f) return;
+        var monto = parseFloat(this.value) || 0;
+        var proyectado = f.saldo - monto;
+        var warn = document.getElementById('mov-warning');
+        if (proyectado < 0) {
+            document.getElementById('mov-saldo-proyectado').textContent = formatMoneda(proyectado);
+            warn.removeAttribute('hidden');
+        } else {
+            warn.setAttribute('hidden', '');
+        }
+    });
+
+    // Guardar depósito/retiro
+    document.getElementById('btn-modal-guardar').addEventListener('click', function () {
+        var monto    = parseFloat(document.getElementById('mov-monto').value) || 0;
+        var concepto = document.getElementById('mov-concepto').value.trim();
+        var fecha    = document.getElementById('mov-fecha').value;
+
+        if (monto <= 0) { showToast('El monto debe ser mayor a cero', 'error'); return; }
+
+        var url = '/fondos/' + modalState.fondoId + '/' + modalState.tipo;
+        var btn = document.getElementById('btn-modal-guardar');
+        btn.disabled = true;
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monto: monto, concepto: concepto, fecha: fecha }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            btn.disabled = false;
+            if (!data.ok) { showToast(data.error || 'Error al guardar', 'error'); return; }
+            closeModal();
+            updateSaldo(modalState.fondoId, data.saldo, data.saldo_display, data.saldo_negativo);
+            refreshMovsBtn(modalState.fondoId, '?');
+            var msg = modalState.tipo === 'depositar' ? 'Depósito registrado' : 'Retiro registrado';
+            showToast(msg + (data.saldo_negativo ? ' — saldo negativo' : ''),
+                      data.saldo_negativo ? 'warn' : 'success');
+        })
+        .catch(function () { btn.disabled = false; showToast('Error de red', 'error'); });
+    });
+
+    // ── Aportes pendientes ────────────────────────────────────
+
+    function removeAporteCard(fondoId) {
+        var card = document.getElementById('aporte-card-' + fondoId);
+        if (card) card.remove();
+        var banner = document.getElementById('aportes-banner');
+        if (banner && banner.querySelectorAll('.aporte-card').length === 0) {
+            banner.remove();
+        }
+    }
+
+    APORTES_DATA.forEach(function (ap) {
+        var btnConf     = document.getElementById('btn-confirmar-aporte-' + ap.id);
+        var btnSaltar   = document.getElementById('btn-saltar-aporte-'    + ap.id);
+        var razonSec    = document.getElementById('aporte-razon-'         + ap.id);
+        var btnConfSalt = document.getElementById('btn-confirmar-salto-'  + ap.id);
+
+        if (btnConf) {
+            btnConf.addEventListener('click', function () {
+                var monto = parseFloat(document.getElementById('aporte-monto-' + ap.id).value) || 0;
+                if (monto <= 0) { showToast('El monto debe ser mayor a cero', 'error'); return; }
+                btnConf.disabled = true;
+
+                fetch('/fondos/api/aporte', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fondo_id: ap.id, accion: 'confirmar', monto: monto }),
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    btnConf.disabled = false;
+                    if (!data.ok) { showToast(data.error || 'Error', 'error'); return; }
+                    updateSaldo(ap.id, data.saldo, data.saldo_display, data.saldo_negativo);
+                    refreshMovsBtn(ap.id, '?');
+                    removeAporteCard(ap.id);
+                    showToast('Aporte confirmado', 'success');
+                })
+                .catch(function () { btnConf.disabled = false; showToast('Error de red', 'error'); });
+            });
+        }
+
+        if (btnSaltar && razonSec) {
+            btnSaltar.addEventListener('click', function () {
+                razonSec.removeAttribute('hidden');
+                btnSaltar.setAttribute('hidden', '');
+            });
+        }
+
+        if (btnConfSalt) {
+            btnConfSalt.addEventListener('click', function () {
+                var razon = document.getElementById('input-razon-' + ap.id).value.trim();
+                btnConfSalt.disabled = true;
+
+                fetch('/fondos/api/aporte', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fondo_id: ap.id, accion: 'saltar', razon: razon }),
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    btnConfSalt.disabled = false;
+                    if (!data.ok) { showToast(data.error || 'Error', 'error'); return; }
+                    removeAporteCard(ap.id);
+                    showToast('Aporte saltado esta semana', 'success');
+                })
+                .catch(function () { btnConfSalt.disabled = false; showToast('Error de red', 'error'); });
+            });
+        }
+    });
+
+}());
+</script>
+{% endblock %}

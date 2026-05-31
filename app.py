@@ -13,6 +13,7 @@ from config import Config
 from logger import get_logger, log_action, setup_logging
 from modules.configuracion import configuracion_bp
 from modules.empleados import empleados_bp
+from modules.fondos import fondos_bp
 from modules.gastos import gastos_bp
 from modules.ingresos import ingresos_bp
 
@@ -41,6 +42,7 @@ def create_app() -> Flask:
     app.register_blueprint(gastos_bp)
     app.register_blueprint(empleados_bp)
     app.register_blueprint(configuracion_bp)
+    app.register_blueprint(fondos_bp)
 
     # --- Filtro de moneda ($1,234) ---
     @app.template_filter("moneda")
