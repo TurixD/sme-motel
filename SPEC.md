@@ -233,6 +233,8 @@ Para acceder desde el celular (en la misma red WiFi):
 
 #### 4.4 `asignaciones_turnos`
 
+> **Nota:** Una celda (fecha, turno) puede tener N asignaciones simultáneas — no hay constraint UNIQUE en (fecha, turno_id). Esto permite que varios empleados trabajen el mismo turno el mismo día (ej: dos personas en turno tarde). La unicidad que sí se aplica es (fecha, turno_id, empleado_id) para evitar duplicar al mismo empleado en el mismo turno.
+
 | Campo | Tipo | Descripción |
 |---|---|---|
 | id | integer | PK |

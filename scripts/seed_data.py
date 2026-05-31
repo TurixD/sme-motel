@@ -2,16 +2,17 @@
 seed_data.py - Carga los datos iniciales precargados de SME (SPEC seccion 4).
 
 Carga: turnos, empleados, gastos_fijos, configuracion, fondos, inventario.
-NO toca tablas transaccionales (ingresos, asignaciones, movimientos, etc.).
 
 Uso:
-    python scripts/seed_data.py            # carga si las tablas estan vacias
-    python scripts/seed_data.py --force    # borra los precargados y los recarga
+    python scripts/seed_data.py                   # carga datos base si estan vacios
+    python scripts/seed_data.py --force           # borra y recarga datos base
+    python scripts/seed_data.py --asignaciones    # siembra turnos 4 semanas (idempotente)
 """
 
 import argparse
 import sqlite3
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -145,6 +146,84 @@ def cargar(force: bool = False) -> None:
     print("Datos iniciales cargados correctamente.")
 
 
+# -------------------------------------------------------------
+# Patrón semanal de asignaciones por empleado (SPEC sección 4.2)
+# {emp_id: [(weekday, turno_id), ...]}
+# weekday: 0=Lun … 6=Dom  |  turno_id: 1=mañana, 2=tarde, 3=noche
+# -------------------------------------------------------------
+SCHEDULE_ASIGNACIONES = {
+    1: [(0,1),(1,1),(2,1),(3,1),(4,1)],          # Wendy     Lun-Vie mañana
+    2: [(5,1),(6,1)],                             # Vivina    Sáb-Dom mañana
+    3: [(0,1),(2,1),(3,2),(4,1)],                 # Martha    Lun/Mié/Vie mañana · Jue tarde
+    4: [(0,2),(1,2),(2,2),(3,2),(4,2),(5,2)],     # Dulce     Lun-Sáb tarde
+    5: [(5,2),(6,2)],                             # Cecy      Sáb-Dom tarde
+    6: [(2,2),(4,2),(6,2)],                       # Turi      Mié/Vie/Dom tarde
+    7: [(0,2)],                                   # Gabriel   Lun tarde
+    8: [(0,3),(1,3),(2,3),(3,3),(5,3)],           # Goyo      Lun-Jue/Sáb noche
+    9: [(1,2),(4,3),(5,3),(6,3)],                 # Carmelo   Mar tarde · Vie-Dom noche
+}
+
+
+def sembrar_asignaciones(semanas: int = 4) -> None:
+    """
+    Siembra asignaciones_turnos + pagos_empleados para las próximas N semanas.
+    Empieza en el lunes de la semana actual. Es idempotente: salta
+    duplicados (misma fecha + turno_id + empleado_id).
+    """
+    if not DB_PATH.exists():
+        sys.exit("ERROR: la BD no existe. Corre primero: python scripts/init_db.py")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON;")
+
+    # Sueldos por turno_id
+    sueldos = {row[0]: row[1] for row in conn.execute("SELECT id, sueldo FROM turnos").fetchall()}
+
+    hoy   = date.today()
+    lunes = hoy - timedelta(days=hoy.weekday())
+    fin   = lunes + timedelta(weeks=semanas) - timedelta(days=1)
+
+    insertados = 0
+    saltados   = 0
+
+    try:
+        for semana in range(semanas):
+            week_start = lunes + timedelta(weeks=semana)
+            for emp_id, slots in SCHEDULE_ASIGNACIONES.items():
+                for (weekday, turno_id) in slots:
+                    fecha = (week_start + timedelta(days=weekday)).isoformat()
+
+                    # Idempotencia: skip si ya existe esta combinación
+                    existe = conn.execute(
+                        "SELECT 1 FROM asignaciones_turnos WHERE fecha=? AND turno_id=? AND empleado_id=?",
+                        (fecha, turno_id, emp_id),
+                    ).fetchone()
+                    if existe:
+                        saltados += 1
+                        continue
+
+                    cur = conn.execute(
+                        """INSERT INTO asignaciones_turnos
+                           (fecha, empleado_id, turno_id, es_doble_turno, creado_en)
+                           VALUES (?, ?, ?, 0, datetime('now','localtime'))""",
+                        (fecha, emp_id, turno_id),
+                    )
+                    asig_id = cur.lastrowid
+                    conn.execute(
+                        """INSERT INTO pagos_empleados
+                           (asignacion_turno_id, empleado_id, fecha, monto, pagado, creado_en)
+                           VALUES (?, ?, ?, ?, 1, datetime('now','localtime'))""",
+                        (asig_id, emp_id, fecha, sueldos.get(turno_id, 0)),
+                    )
+                    insertados += 1
+
+        conn.commit()
+        print(f"Asignaciones sembradas: {insertados} nuevas, {saltados} ya existían.")
+        print(f"Rango: {lunes} al {fin} ({semanas} semanas).")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Carga los datos iniciales de SME.")
     parser.add_argument(
@@ -152,5 +231,14 @@ if __name__ == "__main__":
         action="store_true",
         help="Borra los precargados existentes antes de recargar.",
     )
+    parser.add_argument(
+        "--asignaciones",
+        action="store_true",
+        help="Siembra asignaciones_turnos para las próximas 4 semanas (idempotente).",
+    )
     args = parser.parse_args()
-    cargar(force=args.force)
+
+    if args.asignaciones:
+        sembrar_asignaciones(semanas=4)
+    else:
+        cargar(force=args.force)
