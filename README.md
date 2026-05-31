@@ -84,8 +84,8 @@ sme-motel/
 El proyecto se desarrolla en **7 fases incrementales** (ver [`SPEC.md` §7](SPEC.md#7-plan-de-desarrollo-por-fases)).
 
 - [x] **Fase 0 — Cimientos**
-- [ ] **Fase 1 — Operación básica** _(en curso)_
-- [ ] Fase 2 — Fondos y reportes
+- [x] **Fase 1 — Operación básica** ✅
+- [ ] **Fase 2 — Fondos y reportes** _(en curso)_
 - [ ] Fase 3 — IA básica
 - [ ] Fase 4 — Asistente conversacional
 - [ ] Fase 5 — Inventario inteligente
