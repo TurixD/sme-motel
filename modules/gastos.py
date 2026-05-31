@@ -18,9 +18,8 @@ _log = get_logger()
 
 CATEGORIAS = ["Gas", "Luz", "Agua-Pipas", "Agua-Embotellada", "Mantenimiento", "Sam's", "StarTV", "Otro"]
 
-# Usados en los TODO de Fase 2
-_CATEGORIAS_CON_FONDO      = {"Luz": "CFE"}
-_CATEGORIAS_PEDIR_RESERVA  = {"Mantenimiento", "Otro"}
+_CATEGORIAS_CON_FONDO     = {"Luz": "CFE"}
+_CATEGORIAS_PEDIR_RESERVA = {"Mantenimiento", "Otro"}
 
 
 @contextmanager
@@ -31,6 +30,16 @@ def _db():
         yield conn
     finally:
         conn.close()
+
+
+def _saldo_fondo(db, fondo_id: int) -> float:
+    row = db.execute(
+        "SELECT COALESCE(SUM(CASE WHEN tipo='deposito' THEN monto ELSE 0 END),0)"
+        "      -COALESCE(SUM(CASE WHEN tipo='retiro'   THEN monto ELSE 0 END),0) AS s"
+        " FROM movimientos_fondos WHERE fondo_id=?",
+        (fondo_id,),
+    ).fetchone()
+    return float(row["s"])
 
 
 def _calcular_alertas(db) -> list[dict]:
@@ -114,6 +123,11 @@ def index():
 
         alertas = _calcular_alertas(db)
 
+        fondo_reserva = db.execute(
+            "SELECT id FROM fondos WHERE categoria_enlazada IS NULL AND activo=1 LIMIT 1"
+        ).fetchone()
+        fondo_reserva_id = fondo_reserva["id"] if fondo_reserva else None
+
     return render_template(
         "gastos.html",
         hoy=hoy,
@@ -125,6 +139,7 @@ def index():
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         cat_filtro=cat_filtro,
+        fondo_reserva_id=fondo_reserva_id,
     )
 
 
@@ -132,24 +147,17 @@ def index():
 
 @gastos_bp.route("/gastos/registrar", methods=["POST"])
 def registrar():
-    data        = request.get_json(silent=True) or {}
-    fecha       = data.get("fecha") or date.today().isoformat()
-    categoria   = (data.get("categoria") or "").strip()
-    monto       = float(data.get("monto", 0) or 0)
-    descripcion = (data.get("descripcion") or "").strip()
+    data            = request.get_json(silent=True) or {}
+    fecha           = data.get("fecha") or date.today().isoformat()
+    categoria       = (data.get("categoria") or "").strip()
+    monto           = float(data.get("monto", 0) or 0)
+    descripcion     = (data.get("descripcion") or "").strip()
+    descontar_fondo = bool(data.get("descontar_fondo", False))
 
     if categoria not in CATEGORIAS:
         return jsonify({"error": "Categoría inválida"}), 400
     if monto <= 0:
         return jsonify({"error": "El monto debe ser mayor a cero"}), 400
-
-    # TODO Fase 2: si categoria in _CATEGORIAS_PEDIR_RESERVA,
-    #   preguntar al usuario si descontar del fondo Reserva General
-    #   y registrar movimiento en movimientos_fondos (tipo='retiro').
-
-    # TODO Fase 2: si categoria in _CATEGORIAS_CON_FONDO,
-    #   descontar automáticamente del fondo enlazado
-    #   (_CATEGORIAS_CON_FONDO[categoria]) sin confirmación adicional.
 
     with _db() as db:
         cur = db.execute(
@@ -157,14 +165,51 @@ def registrar():
                VALUES (?, ?, ?, ?, datetime('now','localtime'))""",
             (fecha, categoria, monto, descripcion),
         )
-        db.commit()
         nuevo_id = cur.lastrowid
 
+        fondo_row      = None
+        saldo_resultado = None
+
+        if categoria in _CATEGORIAS_CON_FONDO:
+            # Luz → descuento automático del fondo con categoria_enlazada='Luz'
+            fondo_row = db.execute(
+                "SELECT id, nombre FROM fondos WHERE categoria_enlazada=? AND activo=1 LIMIT 1",
+                (categoria,),
+            ).fetchone()
+
+        elif categoria in _CATEGORIAS_PEDIR_RESERVA and descontar_fondo:
+            # Mantenimiento/Otro → usuario confirmó descontar de Reserva General
+            fondo_row = db.execute(
+                "SELECT id, nombre FROM fondos WHERE categoria_enlazada IS NULL AND activo=1 LIMIT 1"
+            ).fetchone()
+
+        if fondo_row:
+            db.execute(
+                "INSERT INTO movimientos_fondos "
+                "(fondo_id, fecha, tipo, monto, concepto, gasto_extra_id) "
+                "VALUES (?, ?, 'retiro', ?, ?, ?)",
+                (fondo_row["id"], fecha, monto, descripcion or categoria, nuevo_id),
+            )
+            db.execute(
+                "UPDATE gastos_extras SET fondo_descontado_id=? WHERE id=?",
+                (fondo_row["id"], nuevo_id),
+            )
+            saldo_resultado = _saldo_fondo(db, fondo_row["id"])
+
+        db.commit()
+
     log_action(
-        "Gasto registrado: id=%d fecha=%s categoria=%s monto=$%.2f desc=%s",
+        "Gasto registrado: id=%d fecha=%s cat=%s monto=$%.2f desc=%s%s",
         nuevo_id, fecha, categoria, monto, descripcion or "—",
+        f" → fondo '{fondo_row['nombre']}'" if fondo_row else "",
     )
-    return jsonify({"ok": True, "id": nuevo_id})
+
+    resp: dict = {"ok": True, "id": nuevo_id}
+    if fondo_row and saldo_resultado is not None:
+        resp["saldo_fondo"]    = saldo_resultado
+        resp["saldo_negativo"] = saldo_resultado < 0
+        resp["nombre_fondo"]   = fondo_row["nombre"]
+    return jsonify(resp)
 
 
 # ── API: editar ───────────────────────────────────────────────
@@ -208,17 +253,25 @@ def editar(gasto_id):
 def eliminar(gasto_id):
     with _db() as db:
         registro = db.execute(
-            "SELECT fecha, categoria, monto FROM gastos_extras WHERE id=?", (gasto_id,)
+            "SELECT fecha, categoria, monto, fondo_descontado_id FROM gastos_extras WHERE id=?",
+            (gasto_id,),
         ).fetchone()
         if not registro:
             return jsonify({"error": "Registro no encontrado"}), 404
+
+        fondo_id = registro["fondo_descontado_id"]
+        if fondo_id:
+            db.execute(
+                "DELETE FROM movimientos_fondos WHERE gasto_extra_id=?", (gasto_id,)
+            )
 
         db.execute("DELETE FROM gastos_extras WHERE id=?", (gasto_id,))
         db.commit()
 
     log_action(
-        "Gasto eliminado: id=%d fecha=%s categoria=%s monto=$%.2f",
+        "Gasto eliminado: id=%d fecha=%s cat=%s monto=$%.2f%s",
         gasto_id, registro["fecha"], registro["categoria"], registro["monto"],
+        " (movimiento fondo revertido)" if fondo_id else "",
     )
     return jsonify({"ok": True})
 

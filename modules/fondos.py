@@ -180,6 +180,20 @@ def index():
     )
 
 
+# ── API: saldo en tiempo real ─────────────────────────────────
+
+@fondos_bp.route("/fondos/<int:fondo_id>/saldo")
+def api_saldo(fondo_id):
+    with _db() as db:
+        fondo = db.execute(
+            "SELECT nombre FROM fondos WHERE id=? AND activo=1", (fondo_id,)
+        ).fetchone()
+        if not fondo:
+            return jsonify({"ok": False, "error": "Fondo no encontrado"}), 404
+        saldo = _saldo(db, fondo_id)
+    return jsonify({"ok": True, "saldo": saldo, "nombre": fondo["nombre"], "saldo_negativo": saldo < 0})
+
+
 # ── API: movimientos de un fondo (para carga dinámica) ───────
 
 @fondos_bp.route("/fondos/<int:fondo_id>/movimientos")

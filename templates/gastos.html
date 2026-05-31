@@ -174,6 +174,39 @@
     {% endif %}
 </div>
 
+<!-- Modal: confirmar descuento de fondo (Mantenimiento / Otro) -->
+<div id="modal-fondo-confirm" class="modal" role="dialog" aria-modal="true" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__box">
+        <h3 class="modal__title">¿Descontar del fondo?</h3>
+        <p style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:var(--space-4)">
+            El gasto de <strong id="fondo-monto-txt" style="color:var(--accent-expense)">$0</strong>
+            puede descontarse del fondo <strong id="fondo-nombre-txt">Reserva general</strong>.
+        </p>
+        <div style="background:var(--bg-tertiary);border-radius:var(--radius-md);padding:var(--space-4);margin-bottom:var(--space-4)">
+            <div style="display:flex;justify-content:space-between;font-size:var(--text-sm);margin-bottom:var(--space-2)">
+                <span style="color:var(--text-secondary)">Saldo actual</span>
+                <span id="fondo-saldo-actual" style="font-family:var(--font-mono);font-weight:600">$0</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:var(--text-sm)">
+                <span style="color:var(--text-secondary)">Después del descuento</span>
+                <span id="fondo-saldo-post" style="font-family:var(--font-mono);font-weight:600">$0</span>
+            </div>
+        </div>
+        <div id="fondo-warn-neg" hidden
+             style="background:rgba(255,184,77,0.08);border:1px solid rgba(255,184,77,0.3);
+                    border-left:3px solid var(--status-warning);border-radius:var(--radius-md);
+                    padding:var(--space-3) var(--space-4);font-size:var(--text-sm);
+                    color:var(--status-warning);margin-bottom:var(--space-4)">
+            ⚠ El saldo del fondo quedaría negativo
+        </div>
+        <div class="modal__actions">
+            <button class="btn btn--expense" id="btn-si-descontar">Sí, descontar</button>
+            <button class="btn btn--ghost"   id="btn-no-descontar">No, solo registrar</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal: editar gasto -->
 <div id="modal-editar" class="modal" role="dialog" aria-modal="true" hidden>
     <div class="modal__backdrop"></div>
@@ -225,9 +258,11 @@
 <script>
 'use strict';
 
-const CHART_DATA = {{ chart_data | tojson }};
-const HISTORIAL  = {{ historial  | tojson }};
-const CATEGORIAS = {{ categorias | tojson }};
+const CHART_DATA           = {{ chart_data      | tojson }};
+const HISTORIAL            = {{ historial       | tojson }};
+const CATEGORIAS           = {{ categorias      | tojson }};
+const FONDO_RESERVA_ID     = {{ fondo_reserva_id | tojson }};
+const CATS_PEDIR_RESERVA   = ['Mantenimiento', 'Otro'];
 
 /* ─── Colores por categoría (de la paleta del SPEC) ─────── */
 const CAT_COLORS = {
@@ -259,6 +294,12 @@ function fmt(n) {
     return '$' + Math.round(Number(n) || 0).toLocaleString('en-US');
 }
 
+function fmtSaldo(n) {
+    const abs  = Math.abs(Number(n) || 0);
+    const sign = n < 0 ? '-' : '';
+    return sign + '$' + Math.round(abs).toLocaleString('en-US');
+}
+
 function toast(msg, type = 'success') {
     const el = document.createElement('div');
     el.className = `toast toast--${type}`;
@@ -282,12 +323,58 @@ document.addEventListener('keydown', e => {
         document.querySelectorAll('.modal:not([hidden])').forEach(m => closeModal(m.id));
 });
 
+/* ─── Modal pre-confirmación fondo ──────────────────────── */
+let _resolveFondoModal = null;
+
+function mostrarModalFondo(monto, saldoActual, nombreFondo) {
+    return new Promise(function (resolve) {
+        _resolveFondoModal = resolve;
+        document.getElementById('fondo-monto-txt').textContent  = fmtSaldo(monto);
+        document.getElementById('fondo-nombre-txt').textContent = nombreFondo;
+        document.getElementById('fondo-saldo-actual').textContent = fmtSaldo(saldoActual);
+        const saldoPost = saldoActual - monto;
+        const elPost = document.getElementById('fondo-saldo-post');
+        elPost.textContent = fmtSaldo(saldoPost);
+        elPost.style.color = saldoPost < 0 ? 'var(--accent-expense)' : '';
+        document.getElementById('fondo-warn-neg').hidden = saldoPost >= 0;
+        openModal('modal-fondo-confirm');
+    });
+}
+
+document.getElementById('btn-si-descontar').addEventListener('click', () => {
+    closeModal('modal-fondo-confirm');
+    if (_resolveFondoModal) { _resolveFondoModal(true);  _resolveFondoModal = null; }
+});
+document.getElementById('btn-no-descontar').addEventListener('click', () => {
+    closeModal('modal-fondo-confirm');
+    if (_resolveFondoModal) { _resolveFondoModal(false); _resolveFondoModal = null; }
+});
+
+/* ─── Banner warning saldo negativo ─────────────────────── */
+function showFondoWarning(nombreFondo, saldo) {
+    let sec = document.querySelector('.alertas-section');
+    if (!sec) {
+        sec = document.createElement('div');
+        sec.className = 'alertas-section';
+        const resumen = document.querySelector('.resumen-grid');
+        if (resumen) resumen.parentNode.insertBefore(sec, resumen);
+    }
+    const banner = document.createElement('div');
+    banner.className = 'alert-banner';
+    banner.innerHTML =
+        '<svg class="alert-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" '
+        + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>'
+        + '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+        + '<span class="alert-text"><strong>' + nombreFondo + '</strong> quedó con saldo negativo: '
+        + '<strong>' + fmtSaldo(saldo) + '</strong>. Revisa el módulo Fondos.</span>';
+    sec.appendChild(banner);
+}
+
 /* ─── Formulario principal ───────────────────────────────── */
 document.getElementById('form-gasto').addEventListener('submit', async e => {
     e.preventDefault();
     const btn = document.getElementById('btn-registrar');
-    btn.disabled = true;
-    btn.textContent = 'Registrando…';
 
     const data = {
         fecha:       document.getElementById('fecha').value,
@@ -297,17 +384,30 @@ document.getElementById('form-gasto').addEventListener('submit', async e => {
     };
 
     if (!data.categoria) {
-        toast('Selecciona una categoría', 'error');
-        btn.disabled = false; btn.textContent = 'Registrar gasto';
-        return;
+        toast('Selecciona una categoría', 'error'); return;
     }
+
+    // Pre-confirmación para Mantenimiento / Otro
+    let descontar_fondo = false;
+    if (CATS_PEDIR_RESERVA.includes(data.categoria) && FONDO_RESERVA_ID) {
+        btn.disabled = true; btn.textContent = 'Verificando fondo…';
+        try {
+            const sr = await fetch('/fondos/' + FONDO_RESERVA_ID + '/saldo').then(r => r.json());
+            btn.disabled = false; btn.textContent = 'Registrar gasto';
+            if (sr.ok) descontar_fondo = await mostrarModalFondo(data.monto, sr.saldo, sr.nombre);
+        } catch {
+            btn.disabled = false; btn.textContent = 'Registrar gasto';
+        }
+    }
+
+    btn.disabled = true; btn.textContent = 'Registrando…';
 
     let res;
     try {
         res = await fetch('/gastos/registrar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
+            body: JSON.stringify(Object.assign({}, data, { descontar_fondo })),
         }).then(r => r.json());
     } catch {
         toast('Error de conexión', 'error');
@@ -318,7 +418,20 @@ document.getElementById('form-gasto').addEventListener('submit', async e => {
     btn.disabled = false; btn.textContent = 'Registrar gasto';
 
     if (res.error) { toast(res.error, 'error'); return; }
-    if (res.ok) { toast('Gasto registrado'); setTimeout(() => location.reload(), 700); }
+    if (res.ok) {
+        let msg = 'Gasto registrado';
+        let tipo = 'success';
+        if (res.nombre_fondo) {
+            msg += ' — descontado de ' + res.nombre_fondo;
+            if (res.saldo_negativo) {
+                msg += ' (saldo negativo)';
+                tipo = 'warn';
+                showFondoWarning(res.nombre_fondo, res.saldo_fondo);
+            }
+        }
+        toast(msg, tipo);
+        setTimeout(() => location.reload(), 900);
+    }
 });
 
 /* ─── Modal editar ───────────────────────────────────────── */

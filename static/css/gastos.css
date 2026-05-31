@@ -398,6 +398,7 @@ select.field-input {
 .toast--show    { opacity: 1; transform: translateX(0); }
 .toast--success { border-left: 3px solid var(--accent-income); }
 .toast--error   { border-left: 3px solid var(--accent-expense); }
+.toast--warn    { border-left: 3px solid var(--status-warning); }
 
 /* === Responsive === */
 @media (max-width: 900px) {
