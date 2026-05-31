@@ -1,0 +1,453 @@
+{% extends 'base.html' %}
+
+{% block title %}Configuración — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/configuracion.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">Configuración</h1>
+</div>
+
+<div class="accordion" id="accordion-config">
+
+    <!-- ── 1. Negocio ────────────────────────────────────────── -->
+    <div class="accordion-item is-open" id="acc-negocio">
+        <button class="accordion-header" id="btn-acc-negocio"
+                aria-expanded="true" aria-controls="panel-negocio">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Negocio
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-negocio" role="region" aria-labelledby="btn-acc-negocio">
+            <div class="accordion-body">
+
+                <div class="config-row">
+                    <div class="config-row__info">
+                        <label class="config-row__label" for="input-comision_tarjeta">Comisión tarjeta</label>
+                        <span class="config-row__hint">Porcentaje que cobra el banco por pagos con tarjeta</span>
+                    </div>
+                    <div class="config-row__control">
+                        <div class="input-suffix" style="width:110px">
+                            <input class="field-input field-input--sm mono" type="number"
+                                   id="input-comision_tarjeta" min="0" max="100" step="0.1"
+                                   value="{{ config.get('comision_tarjeta', '4') }}">
+                            <span class="suffix-symbol">%</span>
+                        </div>
+                        <button class="btn btn--config btn--sm" id="btn-save-comision_tarjeta">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row__info">
+                        <label class="config-row__label" for="input-tipo_cambio_usd_mxn">Tipo de cambio USD → MXN</label>
+                        <span class="config-row__hint">Para convertir costos de IA a pesos mexicanos</span>
+                    </div>
+                    <div class="config-row__control">
+                        <div class="input-prefix" style="width:130px">
+                            <span class="prefix-symbol">$</span>
+                            <input class="field-input field-input--sm mono" type="number"
+                                   id="input-tipo_cambio_usd_mxn" min="0.01" step="0.01"
+                                   value="{{ config.get('tipo_cambio_usd_mxn', '18.50') }}">
+                        </div>
+                        <button class="btn btn--config btn--sm" id="btn-save-tipo_cambio_usd_mxn">Guardar</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 2. Gastos fijos ────────────────────────────────────── -->
+    <div class="accordion-item" id="acc-gastos-fijos">
+        <button class="accordion-header" id="btn-acc-gastos-fijos"
+                aria-expanded="false" aria-controls="panel-gastos-fijos">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                Gastos fijos
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-gastos-fijos" role="region" aria-labelledby="btn-acc-gastos-fijos">
+            <div class="accordion-body">
+                <div class="table-wrap">
+                    <table class="tabla">
+                        <thead>
+                            <tr>
+                                <th>Concepto</th>
+                                <th>Monto estimado</th>
+                                <th>Frecuencia</th>
+                                <th>Día aviso</th>
+                                <th>Activo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for gf in gastos_fijos %}
+                            <tr>
+                                <td class="fw-600">{{ gf.concepto }}</td>
+                                <td>
+                                    <div class="input-prefix" style="width:150px">
+                                        <span class="prefix-symbol">$</span>
+                                        <input class="field-input field-input--sm mono" type="number"
+                                               id="gf-monto-{{ gf.id }}"
+                                               min="0.01" step="any"
+                                               value="{{ gf.monto_estimado or '' }}"
+                                               placeholder="—">
+                                    </div>
+                                </td>
+                                <td class="text-secondary">{{ gf.frecuencia | capitalize }}</td>
+                                <td>
+                                    <input class="field-input field-input--sm mono" type="number"
+                                           id="gf-dia-{{ gf.id }}"
+                                           min="1" max="28" style="width:72px"
+                                           value="{{ gf.dia_recordatorio or '' }}"
+                                           placeholder="—">
+                                </td>
+                                <td>
+                                    <label class="toggle" title="{{ 'Activo' if gf.activo else 'Inactivo' }}">
+                                        <input type="checkbox" id="gf-activo-{{ gf.id }}"
+                                               {% if gf.activo %}checked{% endif %}>
+                                        <span class="toggle__slider"></span>
+                                    </label>
+                                </td>
+                                <td>
+                                    <button class="btn btn--config btn--sm"
+                                            id="btn-save-gf-{{ gf.id }}">Guardar</button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. IA ──────────────────────────────────────────────── -->
+    <div class="accordion-item" id="acc-ia">
+        <button class="accordion-header" id="btn-acc-ia"
+                aria-expanded="false" aria-controls="panel-ia">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>
+                Inteligencia artificial
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-ia" role="region" aria-labelledby="btn-acc-ia">
+            <div class="accordion-body">
+
+                <div class="config-row">
+                    <div class="config-row__info">
+                        <label class="config-row__label" for="input-umbral_alerta_gasto_ia_usd">Alerta de gasto IA</label>
+                        <span class="config-row__hint">Si el gasto del mes supera este monto en USD, aparece un banner en el dashboard</span>
+                    </div>
+                    <div class="config-row__control">
+                        <div class="input-suffix" style="width:120px">
+                            <input class="field-input field-input--sm mono" type="number"
+                                   id="input-umbral_alerta_gasto_ia_usd" min="0.01" step="0.50"
+                                   value="{{ config.get('umbral_alerta_gasto_ia_usd', '20') }}">
+                            <span class="suffix-symbol">USD</span>
+                        </div>
+                        <button class="btn btn--config btn--sm" id="btn-save-umbral_alerta_gasto_ia_usd">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row__info">
+                        <label class="config-row__label" for="input-memoria_asistente_mensajes">Memoria del asistente</label>
+                        <span class="config-row__hint">Cuántos mensajes recientes recuerda el asistente en cada sesión (1 – 50)</span>
+                    </div>
+                    <div class="config-row__control">
+                        <div class="input-suffix" style="width:130px">
+                            <input class="field-input field-input--sm mono" type="number"
+                                   id="input-memoria_asistente_mensajes" min="1" max="50" step="1"
+                                   value="{{ config.get('memoria_asistente_mensajes', '10') }}">
+                            <span class="suffix-symbol">msgs</span>
+                        </div>
+                        <button class="btn btn--config btn--sm" id="btn-save-memoria_asistente_mensajes">Guardar</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 4. Sistema ────────────────────────────────────────── -->
+    <div class="accordion-item" id="acc-sistema">
+        <button class="accordion-header" id="btn-acc-sistema"
+                aria-expanded="false" aria-controls="panel-sistema">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Sistema
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-sistema" role="region" aria-labelledby="btn-acc-sistema">
+            <div class="accordion-body">
+
+                <div class="config-row">
+                    <div class="config-row__info">
+                        <label class="config-row__label" for="input-timeout_sesion_minutos">Timeout de sesión</label>
+                        <span class="config-row__hint">Minutos de inactividad antes de cerrar la sesión automáticamente</span>
+                    </div>
+                    <div class="config-row__control">
+                        <div class="input-suffix" style="width:110px">
+                            <input class="field-input field-input--sm mono" type="number"
+                                   id="input-timeout_sesion_minutos" min="1" step="1"
+                                   value="{{ config.get('timeout_sesion_minutos', '30') }}">
+                            <span class="suffix-symbol">min</span>
+                        </div>
+                        <button class="btn btn--config btn--sm" id="btn-save-timeout_sesion_minutos">Guardar</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 5. Fondos (solo lectura) ──────────────────────────── -->
+    <div class="accordion-item" id="acc-fondos">
+        <button class="accordion-header" id="btn-acc-fondos"
+                aria-expanded="false" aria-controls="panel-fondos">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                Fondos
+                <span class="badge-upcoming">Gestión completa en Fase 2</span>
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-fondos" role="region" aria-labelledby="btn-acc-fondos">
+            <div class="accordion-body">
+                {% if fondos %}
+                <div class="info-grid">
+                    {% for f in fondos %}
+                    <div class="info-card">
+                        <div class="info-card__name" style="color:{{ f.color }}">{{ f.nombre }}</div>
+                        <div class="info-card__rows">
+                            <div class="info-card__row">
+                                <span class="info-card__row-label">Aporte</span>
+                                <span class="info-card__row-value">{{ f.aporte_periodico | moneda }}</span>
+                            </div>
+                            <div class="info-card__row">
+                                <span class="info-card__row-label">Frecuencia</span>
+                                <span class="info-card__row-value">{{ f.frecuencia_aporte | capitalize }}</span>
+                            </div>
+                            {% if f.meta_mensual %}
+                            <div class="info-card__row">
+                                <span class="info-card__row-label">Meta mensual</span>
+                                <span class="info-card__row-value">{{ f.meta_mensual | moneda }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-tertiary" style="font-size:var(--text-sm)">No hay fondos activos.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 6. Turnos (solo lectura) ──────────────────────────── -->
+    <div class="accordion-item" id="acc-turnos">
+        <button class="accordion-header" id="btn-acc-turnos"
+                aria-expanded="false" aria-controls="panel-turnos">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Turnos
+                <span class="badge-upcoming">Edición en módulo Empleados</span>
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-turnos" role="region" aria-labelledby="btn-acc-turnos">
+            <div class="accordion-body">
+                <div class="info-grid">
+                    {% for t in turnos %}
+                    <div class="info-card">
+                        <div class="info-card__name">{{ turnos_label.get(t.nombre, t.nombre) }}</div>
+                        <div class="info-card__rows">
+                            <div class="info-card__row">
+                                <span class="info-card__row-label">Horario</span>
+                                <span class="info-card__row-value">{{ t.hora_inicio }} – {{ t.hora_fin }}</span>
+                            </div>
+                            <div class="info-card__row">
+                                <span class="info-card__row-label">Sueldo</span>
+                                <span class="info-card__row-value">{{ t.sueldo | moneda }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 7. Backups ─────────────────────────────────────────── -->
+    <div class="accordion-item" id="acc-backups">
+        <button class="accordion-header" id="btn-acc-backups"
+                aria-expanded="false" aria-controls="panel-backups">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Backups
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-backups" role="region" aria-labelledby="btn-acc-backups">
+            <div class="accordion-body">
+                <div class="backup-info">
+                    <div class="backup-info-row">
+                        <span class="backup-info-row__label">Carpeta</span>
+                        <span class="backup-info-row__value">{{ backup.ruta }}</span>
+                    </div>
+                    <div class="backup-info-row">
+                        <span class="backup-info-row__label">Archivos guardados</span>
+                        <span class="backup-info-row__value" id="backup-cantidad">{{ backup.cantidad }}</span>
+                    </div>
+                    <div class="backup-info-row">
+                        <span class="backup-info-row__label">Último backup</span>
+                        <span class="backup-info-row__value" id="backup-ultimo">
+                            {{ backup.ultimo or '—' }}
+                        </span>
+                    </div>
+                </div>
+                <button class="btn btn--ghost btn--sm" id="btn-backup-now">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Ejecutar backup ahora
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /accordion -->
+
+<div id="toast-container"></div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+(function () {
+    // ── Acordeón ─────────────────────────────────────────────
+    document.querySelectorAll('.accordion-header').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var item   = btn.closest('.accordion-item');
+            var isOpen = item.classList.contains('is-open');
+            item.classList.toggle('is-open', !isOpen);
+            btn.setAttribute('aria-expanded', String(!isOpen));
+        });
+    });
+
+    // ── Toast ─────────────────────────────────────────────────
+    function showToast(msg, type) {
+        var container = document.getElementById('toast-container');
+        var toast = document.createElement('div');
+        toast.className = 'toast toast--' + type;
+        toast.textContent = msg;
+        container.appendChild(toast);
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () { toast.classList.add('toast--show'); });
+        });
+        setTimeout(function () {
+            toast.classList.remove('toast--show');
+            toast.addEventListener('transitionend', function () { toast.remove(); }, { once: true });
+        }, 3000);
+    }
+
+    // ── Guardar campo de configuracion ────────────────────────
+    function saveConfig(clave, valor) {
+        fetch('/configuracion/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clave: clave, valor: valor }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.ok) showToast('Guardado', 'success');
+            else showToast(data.error || 'Error al guardar', 'error');
+        })
+        .catch(function () { showToast('Error de red', 'error'); });
+    }
+
+    // ── Guardar gasto fijo ────────────────────────────────────
+    function saveGastoFijo(id) {
+        var monto  = document.getElementById('gf-monto-'  + id).value;
+        var dia    = document.getElementById('gf-dia-'    + id).value;
+        var activo = document.getElementById('gf-activo-' + id).checked;
+
+        fetch('/configuracion/api/gasto-fijo/' + id, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monto_estimado: monto, dia_recordatorio: dia, activo: activo }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.ok) showToast('Guardado', 'success');
+            else showToast(data.error || 'Error al guardar', 'error');
+        })
+        .catch(function () { showToast('Error de red', 'error'); });
+    }
+
+    // ── Wiring: campos de configuracion ──────────────────────
+    var configClaves = [
+        'comision_tarjeta',
+        'tipo_cambio_usd_mxn',
+        'umbral_alerta_gasto_ia_usd',
+        'memoria_asistente_mensajes',
+        'timeout_sesion_minutos',
+    ];
+    configClaves.forEach(function (clave) {
+        var btn   = document.getElementById('btn-save-' + clave);
+        var input = document.getElementById('input-' + clave);
+        if (btn && input) {
+            btn.addEventListener('click', function () { saveConfig(clave, input.value); });
+        }
+    });
+
+    // ── Wiring: gastos fijos ──────────────────────────────────
+    var gfIds = {{ gastos_fijos | map(attribute='id') | list | tojson }};
+    gfIds.forEach(function (id) {
+        var btn = document.getElementById('btn-save-gf-' + id);
+        if (btn) btn.addEventListener('click', function () { saveGastoFijo(id); });
+    });
+
+    // ── Backup manual ─────────────────────────────────────────
+    var btnBackup = document.getElementById('btn-backup-now');
+    if (btnBackup) {
+        btnBackup.addEventListener('click', function () {
+            btnBackup.disabled = true;
+            btnBackup.textContent = 'Ejecutando…';
+
+            fetch('/configuracion/api/backup', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                btnBackup.disabled = false;
+                btnBackup.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Ejecutar backup ahora';
+
+                if (data.ok) {
+                    showToast('Backup completado', 'success');
+                    var elCant  = document.getElementById('backup-cantidad');
+                    var elUlt   = document.getElementById('backup-ultimo');
+                    if (elCant && data.cantidad != null) elCant.textContent = data.cantidad;
+                    if (elUlt  && data.ultimo)           elUlt.textContent  = data.ultimo;
+                } else {
+                    showToast(data.error || 'Error al hacer backup', 'error');
+                }
+            })
+            .catch(function () {
+                btnBackup.disabled = false;
+                btnBackup.textContent = 'Ejecutar backup ahora';
+                showToast('Error de red', 'error');
+            });
+        });
+    }
+}());
+</script>
+{% endblock %}
