@@ -1,0 +1,429 @@
+{% extends 'base.html' %}
+
+{% block title %}Reportes — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reportes.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">Reportes</h1>
+    <a id="btn-exportar" href="#" class="btn btn--ghost btn--sm" hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar CSV
+    </a>
+</div>
+
+<!-- Pestañas -->
+<div class="tab-nav" id="tab-nav">
+    <button class="tab-btn is-active" id="tab-semanal">Semanal</button>
+    <button class="tab-btn"           id="tab-mensual">Mensual</button>
+    <button class="tab-btn"           id="tab-anual">Anual</button>
+</div>
+
+<!-- Navegación de periodo -->
+<div class="period-nav" id="period-nav">
+    <button class="btn btn--ghost btn--sm" id="btn-prev">← Anterior</button>
+    <span class="period-label" id="period-label">Cargando…</span>
+    <button class="btn btn--ghost btn--sm" id="btn-next">Siguiente →</button>
+</div>
+
+<!-- Estado de carga -->
+<div class="loading-state" id="loading-state" hidden>Cargando reporte…</div>
+
+<!-- Contenido renderizado por JS -->
+<div id="reporte-content"></div>
+
+<div id="toast-container"></div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+'use strict';
+
+/* ─── Estado ─────────────────────────────────────────────── */
+const estado = { tab: 'semanal', param: null };
+let chartInstance = null;
+
+/* ─── Colores por categoría ──────────────────────────────── */
+const CAT_COLORS = {
+    'Gas':              '#FFB84D',
+    'Luz':              '#22C55E',
+    'Agua-Pipas':       '#7BB8FF',
+    'Agua-Embotellada': '#5EE8B4',
+    'Mantenimiento':    '#A78BFA',
+    "Sam's":            '#FF7A8A',
+    'StarTV':           '#C084FC',
+    'Otro':             '#6A6A78',
+};
+
+/* ─── Utilidades ─────────────────────────────────────────── */
+function fmt(n) {
+    const abs = Math.abs(Number(n) || 0);
+    return (n < 0 ? '-' : '') + '$' + Math.round(abs).toLocaleString('en-US');
+}
+
+function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function deltaHtml(d, invertir) {
+    if (d == null) return '<span class="tarjeta-delta delta--neutral">—</span>';
+    const up   = d >= 0;
+    const bueno = invertir ? !up : up;
+    const cls  = up
+        ? (bueno ? 'delta--up-good'   : 'delta--up-bad')
+        : (bueno ? 'delta--down-good' : 'delta--down-bad');
+    const icon = up ? '↑' : '↓';
+    return `<span class="tarjeta-delta ${cls}">${icon} ${Math.abs(d)}%</span>`;
+}
+
+/* ─── Cargar reporte ─────────────────────────────────────── */
+async function cargarReporte(tab, param) {
+    estado.tab   = tab;
+    estado.param = param || null;
+
+    document.getElementById('loading-state').hidden = false;
+    document.getElementById('reporte-content').innerHTML = '';
+    document.getElementById('period-label').textContent = '…';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+    let url;
+    if (tab === 'semanal') url = '/reportes/api/semanal' + (param ? '?lunes=' + param : '');
+    else if (tab === 'mensual') url = '/reportes/api/mensual' + (param ? '?mes=' + param : '');
+    else url = '/reportes/api/anual';
+
+    let data;
+    try {
+        data = await fetch(url).then(r => r.json());
+    } catch {
+        document.getElementById('loading-state').hidden = true;
+        document.getElementById('reporte-content').innerHTML =
+            '<p class="empty-note" style="padding:var(--space-8)">Error al cargar el reporte.</p>';
+        return;
+    }
+
+    document.getElementById('loading-state').hidden = true;
+    renderReport(data, tab);
+}
+
+/* ─── Renderizar reporte ─────────────────────────────────── */
+function renderReport(data, tab) {
+    const esAnual = tab === 'anual';
+
+    // Label del periodo
+    document.getElementById('period-label').textContent = data.periodo.label;
+
+    // Mostrar/ocultar nav
+    document.getElementById('period-nav').hidden = esAnual;
+
+    // Botones prev / next
+    if (!esAnual) {
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        btnPrev.dataset.param = data.prev_param || '';
+        btnNext.dataset.param = data.next_param || '';
+        btnNext.disabled = !data.next_param;
+    }
+
+    // Exportar
+    const btnExp = document.getElementById('btn-exportar');
+    if (!esAnual) {
+        let href = '/reportes/exportar?tipo=' + tab;
+        if (tab === 'semanal') href += '&lunes=' + data.periodo.desde;
+        else href += '&mes=' + data.periodo.desde.slice(0, 7);
+        btnExp.href   = href;
+        btnExp.hidden = false;
+    } else {
+        btnExp.hidden = true;
+    }
+
+    // Construir HTML
+    let html = renderTarjetas(data.tarjetas, esAnual);
+
+    if (!esAnual) {
+        if (data.gastos_por_cat && data.gastos_por_cat.length)
+            html += renderGastosCat(data.gastos_por_cat);
+        if (data.fondos && data.fondos.length)
+            html += renderFondos(data.fondos);
+        if (data.nomina && data.nomina.length)
+            html += renderNomina(data.nomina, data.nomina_total);
+        html += renderComparativo(data.tarjetas, data.nomina_total);
+    }
+
+    document.getElementById('reporte-content').innerHTML = html;
+
+    // Init chart después de que el DOM esté actualizado
+    if (!esAnual && data.gastos_por_cat && data.gastos_por_cat.length)
+        initChart(data.gastos_por_cat);
+}
+
+/* ─── Tarjetas ───────────────────────────────────────────── */
+function renderTarjetas(t, sinComparacion) {
+    const items = [
+        { key: 'ingresos', label: 'Ingresos',      color: 'var(--accent-income)',  invertir: false },
+        { key: 'gastos',   label: 'Gastos',         color: 'var(--accent-expense)', invertir: true  },
+        { key: 'utilidad', label: 'Utilidad',       color: 'var(--text-primary)',   invertir: false },
+        { key: 'tu_parte', label: 'Tu parte (50%)', color: 'var(--accent-ai)',      invertir: false },
+    ];
+
+    const cards = items.map(item => {
+        const d = t[item.key];
+        const delta = sinComparacion ? '' : deltaHtml(d.delta_pct, item.invertir);
+        const prev  = (!sinComparacion && d.anterior !== undefined)
+            ? `<div class="tarjeta-anterior">Anterior: ${fmt(d.anterior)}</div>`
+            : '';
+        return `
+            <div class="card tarjeta-card">
+                <div class="card__label">${item.label}</div>
+                <div class="card__value" style="color:${item.color}">${fmt(d.actual)}</div>
+                ${delta}
+                ${prev}
+            </div>`;
+    }).join('');
+
+    return `<div class="tarjetas-grid">${cards}</div>`;
+}
+
+/* ─── Gastos por categoría + gráfica ─────────────────────── */
+function renderGastosCat(cats) {
+    return `
+        <div class="card seccion">
+            <div class="seccion-titulo">Gastos por categoría</div>
+            <div class="chart-bar-wrap"><canvas id="chart-gastos"></canvas></div>
+        </div>`;
+}
+
+function initChart(cats) {
+    const canvas = document.getElementById('chart-gastos');
+    if (!canvas) return;
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+    const labels   = cats.map(c => c.categoria);
+    const actual   = cats.map(c => c.actual);
+    const anterior = cats.map(c => c.anterior);
+    const colors   = labels.map(l => CAT_COLORS[l] || '#9A9AA8');
+
+    const gridColor  = '#2A2A35';
+    const tickColor  = '#6A6A78';
+    const fontFamily = "'Inter', sans-serif";
+
+    chartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Actual',
+                    data: actual,
+                    backgroundColor: colors.map(c => c + 'CC'),
+                    borderColor: colors,
+                    borderWidth: 1.5,
+                    borderRadius: 3,
+                },
+                {
+                    label: 'Anterior',
+                    data: anterior,
+                    backgroundColor: '#9A9AA830',
+                    borderColor: '#9A9AA860',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: tickColor,
+                        font: { size: 12, family: fontFamily },
+                        usePointStyle: true,
+                        pointStyleWidth: 8,
+                        padding: 16,
+                    },
+                },
+                tooltip: {
+                    backgroundColor: '#1A1A22',
+                    borderColor: '#2A2A35',
+                    borderWidth: 1,
+                    titleColor: '#9A9AA8',
+                    bodyColor: '#E8E8EE',
+                    padding: 10,
+                    callbacks: {
+                        label: ctx => ' ' + fmt(ctx.raw),
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: tickColor, font: { size: 11, family: fontFamily } },
+                },
+                y: {
+                    grid: { color: gridColor },
+                    ticks: {
+                        color: tickColor,
+                        font: { size: 11, family: fontFamily },
+                        callback: v => fmt(v),
+                    },
+                    beginAtZero: true,
+                },
+            },
+        },
+    });
+}
+
+/* ─── Fondos ─────────────────────────────────────────────── */
+function renderFondos(fondos) {
+    const rows = fondos.map(f => {
+        const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+                     background:${esc(f.color)};margin-right:6px;vertical-align:middle"></span>`;
+        const neg = f.saldo_final < 0 ? ' text-expense' : '';
+        return `<tr>
+            <td>${dot}${esc(f.nombre)}</td>
+            <td class="text-right mono">${fmt(f.saldo_inicial)}</td>
+            <td class="text-right mono text-income">+${fmt(f.entradas)}</td>
+            <td class="text-right mono text-expense">${f.salidas > 0 ? '-' + fmt(f.salidas) : '—'}</td>
+            <td class="text-right mono fw-600${neg}">${fmt(f.saldo_final)}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+        <div class="card seccion">
+            <div class="seccion-titulo">Fondos</div>
+            <div class="table-wrap"><table class="tabla">
+                <thead><tr>
+                    <th>Fondo</th>
+                    <th class="text-right">Saldo inicial</th>
+                    <th class="text-right">Entradas</th>
+                    <th class="text-right">Salidas</th>
+                    <th class="text-right">Saldo final</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table></div>
+        </div>`;
+}
+
+/* ─── Nómina ─────────────────────────────────────────────── */
+function renderNomina(nomina, total) {
+    const rows = nomina.map(n => `
+        <tr>
+            <td>${esc(n.nombre)}</td>
+            <td class="text-right">${n.dias}</td>
+            <td class="text-right mono">${fmt(n.total)}</td>
+        </tr>`).join('');
+
+    return `
+        <div class="card seccion">
+            <div class="seccion-titulo">
+                Nómina
+                <span class="seccion-badge">Informativa — no resta de utilidad</span>
+            </div>
+            <div class="table-wrap"><table class="tabla">
+                <thead><tr>
+                    <th>Empleado</th>
+                    <th class="text-right">Días</th>
+                    <th class="text-right">Total</th>
+                </tr></thead>
+                <tbody>
+                    ${rows}
+                    <tr class="tabla-total">
+                        <td><strong>Total</strong></td>
+                        <td></td>
+                        <td class="text-right mono fw-600">${fmt(total)}</td>
+                    </tr>
+                </tbody>
+            </table></div>
+        </div>`;
+}
+
+/* ─── Tabla comparativa ──────────────────────────────────── */
+function renderComparativo(t, nominaTotal) {
+    const items = [
+        { label: 'Ingresos',       key: 'ingresos' },
+        { label: 'Gastos',         key: 'gastos'   },
+        { label: 'Utilidad neta',  key: 'utilidad' },
+        { label: 'Tu parte (50%)', key: 'tu_parte' },
+    ];
+
+    const rows = items.map(item => {
+        const d    = t[item.key];
+        const diff = d.actual - (d.anterior || 0);
+        const sign = diff >= 0 ? '+' : '';
+        const cls  = diff >= 0 ? 'text-income' : 'text-expense';
+        const pct  = d.delta_pct != null
+            ? ` (${d.delta_pct >= 0 ? '+' : ''}${d.delta_pct}%)`
+            : '';
+        return `<tr>
+            <td>${item.label}</td>
+            <td class="text-right mono fw-600">${fmt(d.actual)}</td>
+            <td class="text-right mono text-tertiary">${fmt(d.anterior || 0)}</td>
+            <td class="text-right mono ${cls}">${sign}${fmt(diff)}${pct}</td>
+        </tr>`;
+    }).join('');
+
+    const nomRow = `
+        <tr class="tabla-muted">
+            <td>Nómina <em>(informativa)</em></td>
+            <td class="text-right mono">${fmt(nominaTotal)}</td>
+            <td class="text-right">—</td>
+            <td class="text-right">—</td>
+        </tr>`;
+
+    return `
+        <div class="card seccion">
+            <div class="seccion-titulo">Resumen comparativo</div>
+            <div class="table-wrap"><table class="tabla">
+                <thead><tr>
+                    <th>Concepto</th>
+                    <th class="text-right">Actual</th>
+                    <th class="text-right">Anterior</th>
+                    <th class="text-right">Diferencia</th>
+                </tr></thead>
+                <tbody>${rows}${nomRow}</tbody>
+            </table></div>
+        </div>`;
+}
+
+/* ─── Wiring ─────────────────────────────────────────────── */
+
+// Tabs
+document.getElementById('tab-semanal').addEventListener('click', function () {
+    setTab('semanal');
+    cargarReporte('semanal', null);
+});
+document.getElementById('tab-mensual').addEventListener('click', function () {
+    setTab('mensual');
+    cargarReporte('mensual', null);
+});
+document.getElementById('tab-anual').addEventListener('click', function () {
+    setTab('anual');
+    cargarReporte('anual', null);
+});
+
+function setTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('is-active'));
+    document.getElementById('tab-' + tab).classList.add('is-active');
+}
+
+// Navegación prev / next
+document.getElementById('btn-prev').addEventListener('click', function () {
+    const p = this.dataset.param;
+    if (p) cargarReporte(estado.tab, p);
+});
+document.getElementById('btn-next').addEventListener('click', function () {
+    const p = this.dataset.param;
+    if (p && !this.disabled) cargarReporte(estado.tab, p);
+});
+
+// Carga inicial: semana anterior
+cargarReporte('semanal', null);
+</script>
+{% endblock %}
