@@ -16,9 +16,9 @@ from logger import get_logger, log_action
 gastos_bp = Blueprint("gastos", __name__)
 _log = get_logger()
 
-CATEGORIAS = ["Gas", "Luz", "Agua-Pipas", "Agua-Embotellada", "Mantenimiento", "Sam's", "StarTV", "Otro"]
+CATEGORIAS = ["Gas", "Luz", "Agua-Pipas", "Agua-Embotellada", "Mantenimiento", "Sam's", "StarTV", "Renta", "Otro"]
 
-_CATEGORIAS_CON_FONDO     = {"Luz": "CFE"}
+_CATEGORIAS_CON_FONDO     = {"Luz": "CFE", "Renta": "Renta"}
 _CATEGORIAS_PEDIR_RESERVA = {"Mantenimiento", "Otro"}
 
 

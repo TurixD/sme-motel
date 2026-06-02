@@ -45,7 +45,6 @@ EMPLEADOS = [
 
 # 4.7 gastos_fijos: (concepto, monto_estimado, frecuencia, dia_recordatorio)
 GASTOS_FIJOS = [
-    ("Renta",      40000, "mensual",    None),
     ("CFE",        16000, "bimestral",  30),
     ("StarTV",     None,  "mensual",    None),
     ("Contadores", 250,   "mensual",    None),
@@ -69,6 +68,8 @@ FONDOS = [
      20000, 15000, 5000, "semanal", "lunes", 1, None, "#34D399"),
     ("CFE", "Fondo para pago de luz (CFE). Meta real bimestral $16,000.",
      8000, 0, 2000, "semanal", "lunes", 1, "Luz", "#22C55E"),
+    ("Renta", "Fondo para pago semanal de renta ($10,000/semana).",
+     40000, 0, 0, "semanal", "lunes", 0, "Renta", "#FFB84D"),
 ]
 
 # 4.12 inventario: (nombre, proveedor_default)
@@ -224,6 +225,53 @@ def sembrar_asignaciones(semanas: int = 4) -> None:
         conn.close()
 
 
+def sembrar_historico_renta() -> None:
+    """
+    Registra el pago de renta del domingo 2026-05-31 si no existe.
+    Idempotente: no duplica si ya fue sembrado.
+    """
+    if not DB_PATH.exists():
+        sys.exit("ERROR: la BD no existe. Corre primero: python scripts/init_db.py")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    try:
+        fondo = conn.execute(
+            "SELECT id FROM fondos WHERE nombre='Renta' AND activo=1"
+        ).fetchone()
+        if not fondo:
+            print("Fondo 'Renta' no encontrado — corre seed_data.py primero.")
+            return
+
+        desc = "Pago renta semana del 2026-05-25 al 2026-05-31"
+        existe = conn.execute(
+            "SELECT id FROM gastos_extras WHERE descripcion=?", (desc,)
+        ).fetchone()
+        if existe:
+            print("Histórico de renta 2026-05-31 ya existe, omitiendo.")
+            return
+
+        cur = conn.execute(
+            "INSERT INTO gastos_extras (fecha, categoria, monto, descripcion) VALUES (?,?,?,?)",
+            ("2026-05-31", "Renta", 10000.0, desc),
+        )
+        gasto_id = cur.lastrowid
+        conn.execute(
+            "INSERT INTO movimientos_fondos "
+            "(fondo_id, fecha, tipo, monto, concepto, gasto_extra_id) VALUES (?,?,?,?,?,?)",
+            (fondo["id"], "2026-05-31", "retiro", 10000.0, desc, gasto_id),
+        )
+        conn.execute(
+            "UPDATE gastos_extras SET fondo_descontado_id=? WHERE id=?",
+            (fondo["id"], gasto_id),
+        )
+        conn.commit()
+        print("Histórico renta 2026-05-31 sembrado correctamente.")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Carga los datos iniciales de SME.")
     parser.add_argument(
@@ -236,9 +284,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Siembra asignaciones_turnos para las próximas 4 semanas (idempotente).",
     )
+    parser.add_argument(
+        "--historico-renta",
+        action="store_true",
+        help="Siembra el pago histórico de renta del 2026-05-31 (idempotente).",
+    )
     args = parser.parse_args()
 
     if args.asignaciones:
         sembrar_asignaciones(semanas=4)
+    elif args.historico_renta:
+        sembrar_historico_renta()
     else:
         cargar(force=args.force)
