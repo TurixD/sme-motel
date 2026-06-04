@@ -85,8 +85,8 @@ El proyecto se desarrolla en **7 fases incrementales** (ver [`SPEC.md` §7](SPEC
 
 - [x] **Fase 0 — Cimientos**
 - [x] **Fase 1 — Operación básica** ✅
-- [ ] **Fase 2 — Fondos y reportes** _(en curso)_
-- [ ] Fase 3 — IA básica
+- [x] **Fase 2 — Fondos y reportes** ✅
+- [ ] **Fase 3 — IA básica** _(siguiente)_
 - [ ] Fase 4 — Asistente conversacional
 - [ ] Fase 5 — Inventario inteligente
 - [ ] Fase 6 — Pulido y mascota (GERTY-MOTEL)
