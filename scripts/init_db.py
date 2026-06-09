@@ -97,6 +97,48 @@ def migrar() -> None:
             migraciones += 1
             print("  configuracion: clave 'limite_mensual_ia_usd' agregada")
 
+        # conversaciones_ia: renombrar columnas y agregar nuevas (Fase 4)
+        cols_conv = {row[1] for row in conn.execute("PRAGMA table_info(conversaciones_ia)").fetchall()}
+        if "mensaje" in cols_conv and "contenido" not in cols_conv:
+            conn.execute("ALTER TABLE conversaciones_ia RENAME COLUMN mensaje TO contenido")
+            migraciones += 1
+            print("  conversaciones_ia: columna 'mensaje' renombrada a 'contenido'")
+        if "tokens_usados" in cols_conv and "tokens_input" not in cols_conv:
+            conn.execute("ALTER TABLE conversaciones_ia RENAME COLUMN tokens_usados TO tokens_input")
+            migraciones += 1
+            print("  conversaciones_ia: columna 'tokens_usados' renombrada a 'tokens_input'")
+        cols_conv = {row[1] for row in conn.execute("PRAGMA table_info(conversaciones_ia)").fetchall()}
+        if "tokens_output" not in cols_conv:
+            conn.execute("ALTER TABLE conversaciones_ia ADD COLUMN tokens_output INTEGER")
+            migraciones += 1
+            print("  conversaciones_ia: columna 'tokens_output' agregada")
+        if "costo_usd" not in cols_conv:
+            conn.execute("ALTER TABLE conversaciones_ia ADD COLUMN costo_usd REAL")
+            migraciones += 1
+            print("  conversaciones_ia: columna 'costo_usd' agregada")
+
+        # cambios_pendientes (nueva tabla Fase 4)
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "cambios_pendientes" not in tablas:
+            conn.execute("""
+                CREATE TABLE cambios_pendientes (
+                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sesion_id           TEXT    NOT NULL,
+                    sql                 TEXT    NOT NULL,
+                    descripcion_humana  TEXT    NOT NULL,
+                    tabla               TEXT    NOT NULL,
+                    tipo                TEXT    NOT NULL,
+                    estado              TEXT    NOT NULL DEFAULT 'pendiente',
+                    fecha_propuesta     TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                    fecha_resolucion    TEXT,
+                    registros_afectados INTEGER
+                )
+            """)
+            migraciones += 1
+            print("  cambios_pendientes: tabla creada")
+
         # reportes_narrativas
         tablas = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"

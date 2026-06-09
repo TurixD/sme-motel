@@ -301,6 +301,22 @@ CREATE TABLE IF NOT EXISTS reportes_narrativas (
 );
 
 -- -------------------------------------------------------------
+-- 4.21 cambios_pendientes (Fase 4: asistente conversacional)
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cambios_pendientes (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    sesion_id           TEXT    NOT NULL,
+    sql                 TEXT    NOT NULL,
+    descripcion_humana  TEXT    NOT NULL,
+    tabla               TEXT    NOT NULL,
+    tipo                TEXT    NOT NULL,          -- 'INSERT' | 'UPDATE' | 'DELETE'
+    estado              TEXT    NOT NULL DEFAULT 'pendiente', -- 'pendiente' | 'ejecutado' | 'cancelado'
+    fecha_propuesta     TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    fecha_resolucion    TEXT,
+    registros_afectados INTEGER
+);
+
+-- -------------------------------------------------------------
 -- Indices utiles para consultas frecuentes
 -- -------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_ingresos_fecha            ON ingresos_diarios(fecha);

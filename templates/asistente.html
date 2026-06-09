@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}SME - Asistente{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/asistente.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="asistente">
+
+    {# ── Header ───────────────────────────────────────────────── #}
+    <div class="asistente__header">
+        <h2 class="asistente__titulo">Asistente SME</h2>
+        <div class="asistente__sesion">
+            <span class="asistente__sesion-dot"></span>
+            <span id="sesion-label">Sesión activa</span>
+        </div>
+        <button class="btn btn--sm btn--ghost" id="btn-nueva-sesion">Nueva conversación</button>
+    </div>
+
+    {# ── Área de chat ─────────────────────────────────────────── #}
+    <div class="asistente__chat" id="chat-area">
+
+        {# Estado vacío (visible cuando no hay historial) #}
+        <div class="asistente__vacio" id="chat-vacio"
+             {% if historial %}style="display:none"{% endif %}>
+            <div class="asistente__vacio-titulo">¿Qué quieres saber?</div>
+            <ul class="asistente__vacio-sugs">
+                <button class="asistente__vacio-sug">¿Cuánto ingresé esta semana?</button>
+                <button class="asistente__vacio-sug">¿Cuánto gasté en gas este mes?</button>
+                <button class="asistente__vacio-sug">¿Cuánto tiene el fondo de Reserva?</button>
+                <button class="asistente__vacio-sug">¿Quién trabaja mañana en la mañana?</button>
+            </ul>
+        </div>
+
+        {# Historial de mensajes (renderizado desde servidor) #}
+        {% for msg in historial %}
+        <div class="msg msg--{{ msg.rol }}">
+            <div class="msg__burbuja">{{ msg.contenido }}</div>
+        </div>
+        {% endfor %}
+
+        {# Cambios pendientes de la sesión actual #}
+        {% for cambio in cambios_pendientes %}
+        <div class="cambio-card {% if cambio.tipo == 'DELETE' %}cambio-card--danger{% endif %}"
+             id="cambio-{{ cambio.id }}"
+             data-cambio-id="{{ cambio.id }}"
+             data-tipo="{{ cambio.tipo }}">
+            <div class="cambio-card__tipo">Cambio propuesto ({{ cambio.tipo }})</div>
+            <div class="cambio-card__desc">{{ cambio.descripcion_humana }}</div>
+            <details class="cambio-card__sql-wrap">
+                <summary>Ver SQL</summary>
+                <pre class="cambio-card__sql">{{ cambio.sql }}</pre>
+            </details>
+            {% if cambio.tipo == 'DELETE' %}
+            <div class="cambio-card__confirm-input">
+                <input type="text" class="cambio-confirm-text"
+                       placeholder="Escribe CONFIRMAR para habilitar">
+            </div>
+            {% endif %}
+            <div class="cambio-card__actions">
+                <button class="btn btn--danger btn-confirmar-cambio"
+                        data-cambio-id="{{ cambio.id }}"
+                        {% if cambio.tipo == 'DELETE' %}disabled{% endif %}>
+                    Confirmar
+                </button>
+                <button class="btn btn--ghost btn-cancelar-cambio"
+                        data-cambio-id="{{ cambio.id }}">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+
+        {# Loading skeleton #}
+        <div class="msg msg--loading" id="msg-loading" style="display:none">
+            <div class="msg__skeleton"></div>
+        </div>
+
+    </div>
+
+    {# ── Alerta límite mensual ─────────────────────────────────── #}
+    <div class="asistente__limit-alert" id="limit-alert" style="display:none">
+        Límite mensual de IA alcanzado. Contacta a Turi para aumentarlo en Configuración.
+    </div>
+
+    {# ── Input ────────────────────────────────────────────────── #}
+    <div class="asistente__input-area">
+        <textarea
+            id="input-mensaje"
+            class="asistente__textarea"
+            placeholder="Pregunta algo... (Enter envía, Shift+Enter nueva línea)"
+            rows="1"
+        ></textarea>
+        <button class="btn btn--primary" id="btn-enviar">Enviar</button>
+    </div>
+
+</div>
+
+<input type="hidden" id="sesion-id" value="{{ sesion_id }}">
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/asistente.js') }}"></script>
+{% endblock %}

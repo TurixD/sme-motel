@@ -10,6 +10,7 @@ from flask import Flask, jsonify, render_template, request
 
 from config import Config
 from logger import get_logger, log_action, setup_logging
+from modules.asistente import asistente_bp
 from modules.configuracion import configuracion_bp
 from modules.empleados import empleados_bp
 from modules.fondos import fondos_bp
@@ -258,6 +259,13 @@ def _dash_data(db_path: str) -> dict:
             })
         recordatorios.sort(key=lambda x: x["proxima_fecha"])
 
+        # --- Costo IA del mes ---
+        mes_inicio = f"{hoy.year}-{hoy.month:02d}-01"
+        costo_ia_mes = float(conn.execute(
+            "SELECT COALESCE(SUM(costo_usd), 0) FROM uso_ia WHERE fecha >= ?",
+            (mes_inicio,),
+        ).fetchone()[0])
+
     return {
         "ing_dia":          ing_dia,
         "gas_dia":          gas_dia,
@@ -273,6 +281,7 @@ def _dash_data(db_path: str) -> dict:
         "turno_matrix":     turno_matrix,
         "turnos_rows":      turnos_rows,
         "recordatorios":    recordatorios,
+        "costo_ia_mes":     costo_ia_mes,
     }
 
 
@@ -285,6 +294,7 @@ def create_app() -> Flask:
     log.info("SME iniciado (puerto %s, debug=%s)", Config.PORT, Config.DEBUG)
 
     # --- Blueprints ---
+    app.register_blueprint(asistente_bp)
     app.register_blueprint(ingresos_bp)
     app.register_blueprint(gastos_bp)
     app.register_blueprint(empleados_bp)

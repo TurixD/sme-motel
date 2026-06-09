@@ -138,9 +138,17 @@
             {% endif %}
         </div>
         <div class="card">
-            <div class="card__label">Clima</div>
-            <div class="card__value" style="font-size: var(--text-xl); font-family: var(--font-sans);">{{ clima }}</div>
-            <p class="empty-note" style="margin-top: var(--space-3);">Aguascalientes — placeholder estático</p>
+            <div class="widget-split">
+                <div class="widget-split__lado">
+                    <div class="card__label">Clima</div>
+                    <div class="card__value" style="font-size: var(--text-base); font-family: var(--font-sans);">{{ clima }}</div>
+                </div>
+                <div class="widget-split__separador"></div>
+                <a href="/configuracion#ia" class="widget-split__lado widget-split__lado--ia">
+                    <div class="card__label">Uso IA del mes</div>
+                    <div class="widget-split__costo">${{ "%.4f" % costo_ia_mes }}</div>
+                </a>
+            </div>
         </div>
     </section>
 

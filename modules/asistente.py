@@ -1,0 +1,530 @@
+"""
+asistente.py - Asistente conversacional IA con tool use (Fase 4).
+
+Blueprint: asistente_bp
+  GET  /asistente
+  POST /asistente/api/mensaje
+  POST /asistente/api/ejecutar_cambio/<int:cambio_id>
+  POST /asistente/api/cancelar_cambio/<int:cambio_id>
+  GET  /asistente/api/nueva_sesion
+"""
+
+import json
+import re
+import sqlite3
+import uuid
+from datetime import date, datetime
+
+import anthropic
+from flask import Blueprint, jsonify, make_response, render_template, request
+
+from ai.cost_calculator import calcular_costo
+from ai.tools import TOOLS
+from config import Config
+from logger import get_logger, log_action
+
+asistente_bp = Blueprint("asistente", __name__)
+_log = get_logger()
+
+_MODEL = "claude-sonnet-4-6"
+_MAX_TOKENS = 1500
+_MAX_ITER = 10
+_MODULO = "asistente"
+
+_TABLAS_WHITELIST = {
+    "gastos_extras", "ingresos_diarios", "asignaciones_turnos",
+    "empleados", "gastos_fijos", "fondos", "movimientos_fondos",
+    "inventario", "bitacora_calendario", "conteos_semanales",
+    "movimientos_inventario",
+}
+
+_RE_ESCRITURA = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|TRUNCATE)\b",
+    re.IGNORECASE,
+)
+
+_SYSTEM_PROMPT = """Eres el asistente IA del SME (Software de Manejo de Estrés), sistema interno de un motel en Aguascalientes, México. El usuario es Turi, dueño junto con su socio Gabriel (utilidades 50/50). El motel tiene 9 empleados en 3 turnos (mañana 08-16, tarde 16-23, noche 23-08). Hablas español mexicano informal pero profesional, directo y honesto. NO usas emojis salvo que sean útiles.
+
+EMPLEADOS ACTIVOS: Wendy (manana), Vivina (manana), Martha (manana/tarde), Dulce (tarde), Cecy (tarde), Goyo (noche), Carmelo (noche/tarde), Turi (socio, tarde), Gabriel (socio, tarde).
+
+REGLAS DE NEGOCIO:
+- Utilidades 50/50 Turi y Gabriel
+- Renta $10,000 semanal (cada domingo automático) + $40,000 mensual
+- Fondos: Reserva general, CFE, Renta
+- Luz→descuenta fondo CFE; Renta→fondo Renta; Mantenimiento/Otro→Reserva (si confirma)
+- Un empleado NO puede tener dos turnos el mismo día — verifica conflictos con SELECT antes de proponer cambio
+- Si el cambio crearía doble turno → propón INTERCAMBIO con DOS llamadas a proponer_cambio_datos explicando que son parte del mismo intercambio
+- Los pagos a empleados se hacen automáticamente al cerrar turno ($400 manana/tarde, $500 noche)
+
+REGLAS DE HERRAMIENTAS:
+- Pregunta de lectura → ejecutar_sql_lectura
+- Tiempo relativo ("ayer", "esta semana", "el mes pasado") → primero obtener_fecha_hoy
+- Modificar datos → SIEMPRE proponer_cambio_datos (nunca escribas directo)
+- Menciona sesiones pasadas → buscar_conversaciones_pasadas
+- Cambio en asignaciones_turnos → SIEMPRE verifica conflictos con SELECT primero
+
+ESQUEMA BD (SQLite, tipos TEXT/REAL/INTEGER):
+
+ingresos_diarios(id, fecha TEXT YYYY-MM-DD, monto_efectivo, monto_tarjeta, monto_transferencia, comision_tarjeta=tarjeta×0.04, total_neto, notas, creado_en)
+
+gastos_extras(id, fecha, categoria TEXT [Gas|Luz|Agua-Pipas|Agua-Embotellada|Mantenimiento|Sam's|StarTV|Renta|Otro], monto, descripcion, recibo_id, fondo_descontado_id, creado_en)
+
+empleados(id, nombre, turno_default [manana|tarde|noche], es_socio INTEGER 0/1, activo INTEGER 0/1, fecha_ingreso, fecha_baja, color_calendario)
+
+turnos(id, nombre [manana|tarde|noche], hora_inicio, hora_fin, sueldo REAL)
+
+asignaciones_turnos(id, fecha, empleado_id FK, turno_id FK, es_doble_turno INTEGER 0/1, notas, creado_en)
+  UNIQUE: (fecha, turno_id, empleado_id) — un empleado NO puede tener dos turnos el mismo día
+
+pagos_empleados(id, asignacion_turno_id FK, empleado_id FK, fecha, monto, pagado INTEGER 0/1, creado_en)
+
+fondos(id, nombre, descripcion, meta_mensual, minimo_seguro, aporte_periodico, frecuencia_aporte, dia_aporte, pregunta_antes, categoria_enlazada, color, activo)
+movimientos_fondos(id, fondo_id FK, fecha, tipo [deposito|retiro|saltado], monto, concepto, razon_saltado, gasto_extra_id FK, creado_en)
+
+gastos_fijos(id, concepto [Renta|CFE|StarTV|Contadores], monto_estimado, frecuencia, dia_recordatorio, proxima_fecha, activo)
+
+inventario(id, nombre, unidad, stock_actual, stock_minimo, precio_unitario, ultima_compra, proveedor_default [Sam's|Mercado Libre|Abarrotera|Otro], activo)
+conteos_semanales(id, fecha, inventario_id FK, cantidad, notas)
+movimientos_inventario(id, inventario_id FK, fecha, tipo [entrada], cantidad, precio_total, recibo_id FK, notas)
+
+bitacora_calendario(id, fecha_cambio, fecha_afectada, descripcion, solicitud_original, usuario)
+uso_ia(id, fecha, funcion, modelo, tokens_input, tokens_output, costo_usd, costo_mxn, exito, error_message)
+conversaciones_ia(id, sesion_id, rol [user|assistant], contenido, fecha, tokens_input, tokens_output, costo_usd)
+
+QUERIES ÚTILES:
+-- Saldo de un fondo:
+SELECT COALESCE(SUM(CASE WHEN tipo='deposito' THEN monto ELSE 0 END),0) -
+       COALESCE(SUM(CASE WHEN tipo='retiro' THEN monto ELSE 0 END),0) AS saldo
+FROM movimientos_fondos WHERE fondo_id = (SELECT id FROM fondos WHERE nombre LIKE '%NombreFondo%')
+
+-- Quién trabaja un día/turno:
+SELECT e.nombre, e.id FROM asignaciones_turnos at
+JOIN empleados e ON e.id=at.empleado_id JOIN turnos t ON t.id=at.turno_id
+WHERE at.fecha='YYYY-MM-DD' AND t.nombre='manana'
+
+-- Pagos a empleado en período:
+SELECT e.nombre, SUM(p.monto) as total FROM pagos_empleados p
+JOIN empleados e ON e.id=p.empleado_id
+WHERE p.fecha BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD' GROUP BY e.id
+
+ESTILO DE RESPUESTA:
+- Conciso, máximo 3-4 oraciones para respuestas simples
+- Listas con guiones
+- Montos como $XX,XXX (sin decimales salvo que sean relevantes)
+- 0 resultados → dilo claramente, no inventes
+- Si falta información, pregúntale a Turi en lugar de adivinar"""
+
+
+# ── BD helpers ────────────────────────────────────────────────────────────────
+
+def _db():
+    conn = sqlite3.connect(Config.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _uso_mensual():
+    hoy = date.today()
+    mes_inicio = f"{hoy.year}-{hoy.month:02d}-01"
+    conn = _db()
+    try:
+        total = conn.execute(
+            "SELECT COALESCE(SUM(costo_usd),0) FROM uso_ia WHERE fecha >= ?",
+            (mes_inicio,),
+        ).fetchone()[0]
+        row = conn.execute(
+            "SELECT valor FROM configuracion WHERE clave='limite_mensual_ia_usd'"
+        ).fetchone()
+        limite = float(row["valor"]) if row else 5.0
+    finally:
+        conn.close()
+    return float(total), limite
+
+
+def _registrar_uso(tokens_in, tokens_out, costo, exito, error_msg=None):
+    conn = _db()
+    try:
+        conn.execute(
+            "INSERT INTO uso_ia (funcion, modelo, tokens_input, tokens_output, costo_usd, exito, error_message) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (_MODULO, _MODEL, tokens_in, tokens_out, costo, exito, error_msg),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _guardar_mensaje(sesion_id, rol, contenido, tokens_in=None, tokens_out=None, costo=None):
+    conn = _db()
+    try:
+        conn.execute(
+            "INSERT INTO conversaciones_ia "
+            "(sesion_id, rol, contenido, fecha, tokens_input, tokens_output, costo_usd) "
+            "VALUES (?, ?, ?, datetime('now','localtime'), ?, ?, ?)",
+            (sesion_id, rol, contenido, tokens_in, tokens_out, costo),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _cargar_historial_claude(sesion_id, limite=20):
+    """Últimos N mensajes en formato Claude API (role/content)."""
+    conn = _db()
+    try:
+        rows = conn.execute(
+            "SELECT rol, contenido FROM conversaciones_ia "
+            "WHERE sesion_id=? ORDER BY id DESC LIMIT ?",
+            (sesion_id, limite),
+        ).fetchall()
+    finally:
+        conn.close()
+    rows.reverse()
+    return [{"role": r["rol"], "content": r["contenido"]} for r in rows]
+
+
+def _cargar_historial_render(sesion_id):
+    """Todos los mensajes de la sesión para renderizar en la página."""
+    conn = _db()
+    try:
+        rows = conn.execute(
+            "SELECT rol, contenido, fecha FROM conversaciones_ia "
+            "WHERE sesion_id=? ORDER BY id ASC LIMIT 200",
+            (sesion_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+def _cambios_pendientes_sesion(sesion_id):
+    conn = _db()
+    try:
+        rows = conn.execute(
+            "SELECT id, descripcion_humana, sql, tabla, tipo FROM cambios_pendientes "
+            "WHERE sesion_id=? AND estado='pendiente' ORDER BY id",
+            (sesion_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── Implementación de tools ───────────────────────────────────────────────────
+
+def _tool_obtener_fecha_hoy(_input):
+    ahora = datetime.now()
+    import calendar as _cal
+    dias_nombre = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    ultimo_dia = _cal.monthrange(ahora.year, ahora.month)[1]
+    return {
+        "fecha": ahora.strftime("%Y-%m-%d"),
+        "hora": ahora.strftime("%H:%M"),
+        "dia_semana": dias_nombre[ahora.weekday()],
+        "mes": ahora.month,
+        "anio": ahora.year,
+        "mes_inicio": ahora.strftime("%Y-%m-01"),
+        "mes_fin": f"{ahora.year}-{ahora.month:02d}-{ultimo_dia:02d}",
+    }
+
+
+def _tool_ejecutar_sql(_input):
+    query = (_input.get("query") or "").strip()
+    if not query:
+        return {"ok": False, "error": "Query vacía"}
+    if _RE_ESCRITURA.search(query):
+        return {"ok": False, "error": "La query contiene operaciones no permitidas. Solo SELECT."}
+    conn = _db()
+    try:
+        cur = conn.execute(query)
+        rows = [dict(r) for r in cur.fetchall()]
+        columnas = [d[0] for d in cur.description] if cur.description else []
+        return {"ok": True, "rows": rows, "columnas": columnas, "row_count": len(rows)}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    finally:
+        conn.close()
+
+
+def _tool_proponer_cambio(_input, sesion_id):
+    sql = (_input.get("sql") or "").strip()
+    desc = (_input.get("descripcion_humana") or "").strip()
+    tabla = (_input.get("tabla") or "").strip().lower()
+    tipo = (_input.get("tipo") or "").strip().upper()
+
+    if not all([sql, desc, tabla, tipo]):
+        return {"ok": False, "error": "Faltan parámetros requeridos (sql, descripcion_humana, tabla, tipo)"}
+    if tabla not in _TABLAS_WHITELIST:
+        return {"ok": False, "error": f"Tabla '{tabla}' no está permitida para escritura"}
+    if tipo not in ("INSERT", "UPDATE", "DELETE"):
+        return {"ok": False, "error": f"Tipo '{tipo}' no válido. Debe ser INSERT, UPDATE o DELETE"}
+    if not re.match(rf"^\s*{tipo}\b", sql, re.IGNORECASE):
+        return {"ok": False, "error": f"El SQL no comienza con {tipo}"}
+
+    conn = _db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO cambios_pendientes (sesion_id, sql, descripcion_humana, tabla, tipo) "
+            "VALUES (?,?,?,?,?)",
+            (sesion_id, sql, desc, tabla, tipo),
+        )
+        conn.commit()
+        cambio_id = cur.lastrowid
+    finally:
+        conn.close()
+
+    return {"ok": True, "cambio_id": cambio_id, "requiere_confirmacion": True}
+
+
+def _tool_buscar_conversaciones(_input):
+    fecha_desde = (_input.get("fecha_desde") or "").strip()
+    fecha_hasta = (_input.get("fecha_hasta") or "").strip()
+    palabras = (_input.get("palabras_clave") or "").strip()
+
+    conditions = []
+    params = []
+    if fecha_desde:
+        conditions.append("fecha >= ?")
+        params.append(fecha_desde + " 00:00:00")
+    if fecha_hasta:
+        conditions.append("fecha <= ?")
+        params.append(fecha_hasta + " 23:59:59")
+    if palabras:
+        conditions.append("contenido LIKE ?")
+        params.append(f"%{palabras}%")
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = (
+        f"SELECT sesion_id, rol, contenido, fecha FROM conversaciones_ia "
+        f"{where} ORDER BY fecha DESC LIMIT 20"
+    )
+    conn = _db()
+    try:
+        rows = [dict(r) for r in conn.execute(query, params).fetchall()]
+    finally:
+        conn.close()
+
+    rows.reverse()
+    return {"ok": True, "mensajes": rows, "total": len(rows)}
+
+
+def _ejecutar_tool(nombre, inp, sesion_id):
+    if nombre == "obtener_fecha_hoy":
+        return _tool_obtener_fecha_hoy(inp)
+    elif nombre == "ejecutar_sql_lectura":
+        return _tool_ejecutar_sql(inp)
+    elif nombre == "proponer_cambio_datos":
+        return _tool_proponer_cambio(inp, sesion_id)
+    elif nombre == "buscar_conversaciones_pasadas":
+        return _tool_buscar_conversaciones(inp)
+    return {"ok": False, "error": f"Tool desconocida: {nombre}"}
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@asistente_bp.route("/asistente")
+def asistente_index():
+    sesion_id = request.cookies.get("sesion_ia")
+    es_nueva = not sesion_id
+    if es_nueva:
+        sesion_id = str(uuid.uuid4())
+
+    historial = [] if es_nueva else _cargar_historial_render(sesion_id)
+    cambios = [] if es_nueva else _cambios_pendientes_sesion(sesion_id)
+
+    resp = make_response(render_template(
+        "asistente.html",
+        sesion_id=sesion_id,
+        historial=historial,
+        cambios_pendientes=cambios,
+    ))
+    if es_nueva:
+        resp.set_cookie("sesion_ia", sesion_id, max_age=60 * 60 * 24 * 30)
+    return resp
+
+
+@asistente_bp.route("/asistente/api/mensaje", methods=["POST"])
+def api_mensaje():
+    data = request.get_json(silent=True) or {}
+    mensaje = (data.get("mensaje") or "").strip()
+    sesion_id = (data.get("sesion_id") or "").strip()
+
+    if not mensaje:
+        return jsonify({"ok": False, "error": "Mensaje vacío"}), 400
+    if not sesion_id:
+        return jsonify({"ok": False, "error": "sesion_id requerido"}), 400
+
+    total_mes, limite = _uso_mensual()
+    if total_mes >= limite:
+        return jsonify({
+            "ok": False,
+            "limite_alcanzado": True,
+            "error": f"Límite mensual de IA alcanzado (${total_mes:.4f} / ${limite:.2f} USD)",
+        }), 429
+
+    _guardar_mensaje(sesion_id, "user", mensaje)
+
+    messages = _cargar_historial_claude(sesion_id, limite=20)
+
+    client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+
+    tokens_totales_in = tokens_totales_out = 0
+    costo_total = 0.0
+    respuesta_final = None
+    cambios_generados = []
+
+    for _ in range(_MAX_ITER):
+        try:
+            response = client.messages.create(
+                model=_MODEL,
+                max_tokens=_MAX_TOKENS,
+                system=_SYSTEM_PROMPT,
+                tools=TOOLS,
+                messages=messages,
+            )
+        except Exception as exc:
+            _log.error("asistente: error Claude: %s", exc)
+            _registrar_uso(0, 0, 0.0, 0, str(exc))
+            return jsonify({"ok": False, "error": f"Error de IA: {exc}"}), 500
+
+        tokens_in = response.usage.input_tokens
+        tokens_out = response.usage.output_tokens
+        costo = calcular_costo(_MODEL, tokens_in, tokens_out)
+        tokens_totales_in += tokens_in
+        tokens_totales_out += tokens_out
+        costo_total += costo
+        _registrar_uso(tokens_in, tokens_out, costo, 1)
+
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason in ("end_turn", "max_tokens"):
+            for block in response.content:
+                if hasattr(block, "text"):
+                    respuesta_final = block.text
+                    break
+            break
+
+        if response.stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type != "tool_use":
+                    continue
+                resultado = _ejecutar_tool(block.name, block.input, sesion_id)
+                if block.name == "proponer_cambio_datos" and resultado.get("ok"):
+                    cambios_generados.append(resultado["cambio_id"])
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(resultado, ensure_ascii=False, default=str),
+                })
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        break
+
+    if respuesta_final is None:
+        respuesta_final = "No pude generar una respuesta. Intenta de nuevo."
+
+    _guardar_mensaje(
+        sesion_id, "assistant", respuesta_final,
+        tokens_totales_in, tokens_totales_out, costo_total,
+    )
+    log_action(
+        "Asistente sesion=%s in=%d out=%d costo=$%.6f",
+        sesion_id[:8], tokens_totales_in, tokens_totales_out, costo_total,
+    )
+
+    cambios_detalle = []
+    if cambios_generados:
+        conn = _db()
+        try:
+            for cid in cambios_generados:
+                row = conn.execute(
+                    "SELECT id, descripcion_humana, sql, tabla, tipo FROM cambios_pendientes WHERE id=?",
+                    (cid,),
+                ).fetchone()
+                if row:
+                    cambios_detalle.append(dict(row))
+        finally:
+            conn.close()
+
+    return jsonify({
+        "ok": True,
+        "respuesta": respuesta_final,
+        "cambios_pendientes": cambios_detalle,
+        "costo_usd": round(costo_total, 6),
+    })
+
+
+@asistente_bp.route("/asistente/api/ejecutar_cambio/<int:cambio_id>", methods=["POST"])
+def api_ejecutar_cambio(cambio_id):
+    conn = _db()
+    try:
+        cambio = conn.execute(
+            "SELECT * FROM cambios_pendientes WHERE id=? AND estado='pendiente'",
+            (cambio_id,),
+        ).fetchone()
+        if not cambio:
+            return jsonify({"ok": False, "error": "Cambio no encontrado o ya procesado"}), 404
+
+        try:
+            cur = conn.execute(cambio["sql"])
+            registros = cur.rowcount
+            conn.execute(
+                "UPDATE cambios_pendientes SET estado='ejecutado', "
+                "fecha_resolucion=datetime('now','localtime'), registros_afectados=? WHERE id=?",
+                (registros, cambio_id),
+            )
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            _log.error("asistente ejecutar_cambio id=%d error: %s", cambio_id, exc)
+            return jsonify({"ok": False, "error": f"Error al ejecutar: {exc}"}), 500
+
+        log_action(
+            "Asistente EJECUTADO cambio_id=%d sesion=%s tabla=%s tipo=%s desc='%s' registros=%d",
+            cambio_id, cambio["sesion_id"][:8], cambio["tabla"],
+            cambio["tipo"], cambio["descripcion_humana"], registros,
+        )
+    finally:
+        conn.close()
+
+    return jsonify({
+        "ok": True,
+        "registros_afectados": registros,
+        "mensaje": f"Ejecutado — {registros} registro(s) afectado(s).",
+    })
+
+
+@asistente_bp.route("/asistente/api/cancelar_cambio/<int:cambio_id>", methods=["POST"])
+def api_cancelar_cambio(cambio_id):
+    conn = _db()
+    try:
+        cambio = conn.execute(
+            "SELECT id, sesion_id, descripcion_humana, tabla FROM cambios_pendientes "
+            "WHERE id=? AND estado='pendiente'",
+            (cambio_id,),
+        ).fetchone()
+        if not cambio:
+            return jsonify({"ok": False, "error": "Cambio no encontrado"}), 404
+        conn.execute(
+            "UPDATE cambios_pendientes SET estado='cancelado', "
+            "fecha_resolucion=datetime('now','localtime') WHERE id=?",
+            (cambio_id,),
+        )
+        conn.commit()
+        log_action(
+            "Asistente CANCELADO cambio_id=%d sesion=%s tabla=%s desc='%s'",
+            cambio_id, cambio["sesion_id"][:8], cambio["tabla"], cambio["descripcion_humana"],
+        )
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@asistente_bp.route("/asistente/api/nueva_sesion")
+def api_nueva_sesion():
+    sesion_id = str(uuid.uuid4())
+    resp = make_response(jsonify({"sesion_id": sesion_id}))
+    resp.set_cookie("sesion_ia", sesion_id, max_age=60 * 60 * 24 * 30)
+    return resp
