@@ -70,6 +70,20 @@ def migrar() -> None:
             migraciones += 1
             print("  uso_ia: columna 'error_message' agregada")
 
+        # gastos_extras: recibo_path
+        columnas_gastos = {row[1] for row in conn.execute("PRAGMA table_info(gastos_extras)").fetchall()}
+        if "recibo_path" not in columnas_gastos:
+            conn.execute("ALTER TABLE gastos_extras ADD COLUMN recibo_path TEXT")
+            migraciones += 1
+            print("  gastos_extras: columna 'recibo_path' agregada")
+
+        # recibos: hash_md5
+        columnas_recibos = {row[1] for row in conn.execute("PRAGMA table_info(recibos)").fetchall()}
+        if "hash_md5" not in columnas_recibos:
+            conn.execute("ALTER TABLE recibos ADD COLUMN hash_md5 TEXT")
+            migraciones += 1
+            print("  recibos: columna 'hash_md5' agregada")
+
         # Agregar config limite_mensual_ia_usd si no existe
         existe = conn.execute(
             "SELECT 1 FROM configuracion WHERE clave='limite_mensual_ia_usd'"

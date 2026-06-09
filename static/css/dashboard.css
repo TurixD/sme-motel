@@ -15,6 +15,45 @@
     font-weight: 600;
 }
 
+/* --- Valor negativo (ganancia roja) --- */
+.val--neg {
+    color: var(--accent-expense);
+}
+
+/* --- Banner aportes pendientes --- */
+.banner-aportes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    background: color-mix(in srgb, var(--accent-fund) 8%, var(--bg-secondary));
+    border: 1px solid color-mix(in srgb, var(--accent-fund) 30%, transparent);
+    border-left: 4px solid var(--accent-fund);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-5);
+    font-size: var(--text-sm);
+}
+
+.banner-aportes__msg {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+}
+
+.banner-aportes__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--accent-fund);
+    flex-shrink: 0;
+}
+
+.banner-aportes__msg strong {
+    color: var(--text-primary);
+}
+
 /* --- Tarjetas grandes (3): ingresos, gastos, ganancia --- */
 .cards-grid {
     display: grid;
@@ -36,12 +75,48 @@
 .card--accent-expense .card__accent-dot { background: var(--accent-expense); }
 .card--accent-net     .card__accent-dot { background: var(--accent-fund); }
 
-/* --- Tarjetas medianas (2): fondo + resumen semana --- */
+/* --- Tarjetas medianas (2) --- */
 .cards-grid--medium {
     grid-template-columns: repeat(2, 1fr);
 }
 
-/* Barra de progreso del fondo */
+/* --- Resumen de la semana (4 columnas) --- */
+.semana-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-top: var(--space-3);
+}
+
+.semana-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-4) var(--space-4) 0;
+}
+
+.semana-col--sep {
+    border-left: 1px solid var(--border);
+    padding-left: var(--space-4);
+}
+
+.semana-col__label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.semana-col__value {
+    font-family: var(--font-mono);
+    font-size: var(--text-xl);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.semana-col__value--income  { color: var(--accent-income); }
+.semana-col__value--expense { color: var(--accent-expense); }
+.semana-col__value--fund    { color: var(--accent-fund); }
+
+/* --- Barra de progreso del fondo --- */
 .progress {
     margin-top: var(--space-4);
 }
@@ -65,45 +140,62 @@
     margin-top: var(--space-2);
 }
 
-/* Resumen de la semana (lista de filas) */
-.summary-list {
-    list-style: none;
+/* --- Gráfica de barras CSS --- */
+.chart-wrap {
     display: flex;
-    flex-direction: column;
+    align-items: stretch;
     gap: var(--space-2);
-    margin-top: var(--space-2);
-}
-.summary-list li {
-    display: flex;
-    justify-content: space-between;
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    padding: var(--space-1) 0;
-    border-bottom: 1px solid var(--border);
-}
-.summary-list li span:last-child {
-    font-family: var(--font-mono);
-    color: var(--text-primary);
+    height: 180px;
 }
 
-/* --- Placeholder de grafica --- */
-.chart-placeholder {
+.chart-col {
+    flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    min-height: 220px;
-    background:
-        repeating-linear-gradient(
-            45deg,
-            var(--bg-tertiary),
-            var(--bg-tertiary) 10px,
-            var(--bg-secondary) 10px,
-            var(--bg-secondary) 20px
-        );
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-md);
+    gap: var(--space-1);
+}
+
+.chart-col__value {
+    font-size: var(--text-xs);
     color: var(--text-tertiary);
-    font-size: var(--text-sm);
+    text-align: center;
+    min-height: 1.2em;
+    white-space: nowrap;
+}
+
+.chart-col__bar-area {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    min-height: 4px;
+}
+
+.chart-col__bar {
+    width: 100%;
+    background: var(--accent-income);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    min-height: 2px;
+    transition: height var(--transition-screen);
+}
+
+.chart-col__bar--hoy {
+    background: var(--accent-fund);
+}
+
+.chart-col__label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.chart-col__label--hoy {
+    color: var(--accent-fund);
+    font-weight: 600;
 }
 
 /* --- Tabla semanal de turnos --- */
@@ -133,7 +225,7 @@
     text-align: left;
     white-space: nowrap;
 }
-/* Celda con empleado: pildora de color */
+
 .shift-pill {
     display: inline-block;
     padding: var(--space-1) var(--space-3);
@@ -149,6 +241,10 @@
 .shift-pill--employee {
     color: var(--accent-employee);
     border-color: var(--accent-employee);
+}
+.shift-empty {
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
 }
 
 /* --- Pendientes / recordatorios --- */
@@ -171,6 +267,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    flex-wrap: wrap;
 }
 .reminder__dot {
     width: 8px;
@@ -179,6 +276,28 @@
     background: var(--status-warning);
     flex-shrink: 0;
 }
+.reminder__concepto {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.reminder__monto {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+}
+.reminder__dias {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 2px var(--space-3);
+}
+.reminder__dias--urgente {
+    color: var(--status-error);
+    border-color: var(--status-error);
+}
+
+/* --- Botones --- */
 .btn {
     font-family: var(--font-sans);
     font-size: var(--text-sm);
@@ -190,14 +309,25 @@
     cursor: pointer;
     white-space: nowrap;
     transition: filter var(--transition-hover);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
 }
 .btn:hover {
     filter: brightness(1.08);
+}
+.btn--sm {
+    font-size: var(--text-xs);
+    padding: var(--space-1) var(--space-3);
 }
 .btn--ghost {
     background: transparent;
     color: var(--text-secondary);
     border: 1px solid var(--border);
+}
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* --- Responsive --- */
@@ -205,13 +335,28 @@
     .cards-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+    .semana-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .semana-col--sep:nth-child(3) {
+        border-left: none;
+        border-top: 1px solid var(--border);
+        padding-top: var(--space-4);
+    }
 }
 @media (max-width: 768px) {
     .cards-grid,
     .cards-grid--medium {
         grid-template-columns: 1fr;
     }
+    .semana-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
     .reminder {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .banner-aportes {
         flex-direction: column;
         align-items: flex-start;
     }

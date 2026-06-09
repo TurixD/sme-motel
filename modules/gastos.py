@@ -1,8 +1,12 @@
 """
-gastos.py - Módulo de gastos extras manuales (SPEC §5.3 — sin IA, Fase 1).
+gastos.py - Módulo de gastos extras (SPEC §5.3). Sub-fase 3B: lectura de recibos con IA.
 """
 
+import base64
 import csv
+import hashlib
+import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
@@ -10,6 +14,7 @@ from io import StringIO
 
 from flask import Blueprint, Response, jsonify, render_template, request
 
+from ai.claude_client import call_claude
 from config import Config
 from logger import get_logger, log_action
 
@@ -17,6 +22,30 @@ gastos_bp = Blueprint("gastos", __name__)
 _log = get_logger()
 
 CATEGORIAS = ["Gas", "Luz", "Agua-Pipas", "Agua-Embotellada", "Mantenimiento", "Sam's", "StarTV", "Renta", "Otro"]
+
+PROMPT_RECIBO = (
+    "Analiza este recibo o comprobante de un negocio en Mexico y extrae los datos en formato JSON.\n"
+    "Responde SOLO con el JSON, sin texto adicional.\n\n"
+    "REGLAS IMPORTANTES:\n"
+    "- El recibo puede aparecer rotado (vertical, horizontal o invertido). Lee el texto en su orientacion natural sin importar la rotacion de la imagen.\n"
+    "- El recibo puede ser impreso o manuscrito. Los manuscritos son mas dificiles de leer; se conservador con la confianza si es manuscrito.\n"
+    "- NUNCA inventes informacion. NUNCA infieras contexto que no este escrito en el recibo. Si un dato no es claro, ponlo como null en vez de inventarlo.\n"
+    "- monto: busca la linea 'TOTAL' del ticket. NO uses subtotal, NO uses el efectivo entregado, NO uses impuestos individuales ni cambio. Si hay descuentos, el TOTAL es despues del descuento. Si no hay linea TOTAL clara, usa SUBTOTAL menos descuentos visibles.\n"
+    "- concepto: maximo 5 palabras estilo telegrama (ejemplos: 'Compra Sams semanal', 'Gas tanque cuarto 3', 'Recarga StarTV agosto'). Sin guiones ni listas de productos. Si el concepto no esta claro, deja concepto=null.\n"
+    "- fecha: la fecha impresa en el recibo en formato YYYY-MM-DD.\n"
+    "- confianza: 'alta' si TODOS los datos son legibles claramente y consistentes. 'media' si algunos datos son dudosos pero la mayoria son legibles. 'baja' si el recibo es manuscrito poco legible, la foto es borrosa, los datos son inciertos, o tuviste que adivinar algun campo.\n\n"
+    "Categorias disponibles (copia el texto exacto de la opcion elegida):\n"
+    "Gas, Luz, Agua-Pipas, Agua-Embotellada, Mantenimiento, Sam's, StarTV, Renta, Otro\n\n"
+    'Formato esperado:\n'
+    '{\n'
+    '  "concepto": "maximo 5 palabras o null",\n'
+    '  "monto": 0.00,\n'
+    '  "fecha": "YYYY-MM-DD",\n'
+    '  "categoria_sugerida": "una de las categorias listadas",\n'
+    '  "confianza": "alta"\n'
+    '}\n\n'
+    "Si no puedes leer algun dato con certeza, ponlo como null."
+)
 
 _CATEGORIAS_CON_FONDO     = {"Luz": "CFE", "Renta": "Renta"}
 _CATEGORIAS_PEDIR_RESERVA = {"Mantenimiento", "Otro"}
@@ -153,6 +182,7 @@ def registrar():
     monto           = float(data.get("monto", 0) or 0)
     descripcion     = (data.get("descripcion") or "").strip()
     descontar_fondo = bool(data.get("descontar_fondo", False))
+    recibo_id       = data.get("recibo_id")
 
     if categoria not in CATEGORIAS:
         return jsonify({"error": "Categoría inválida"}), 400
@@ -171,14 +201,12 @@ def registrar():
         saldo_resultado = None
 
         if categoria in _CATEGORIAS_CON_FONDO:
-            # Luz → descuento automático del fondo con categoria_enlazada='Luz'
             fondo_row = db.execute(
                 "SELECT id, nombre FROM fondos WHERE categoria_enlazada=? AND activo=1 LIMIT 1",
                 (categoria,),
             ).fetchone()
 
         elif categoria in _CATEGORIAS_PEDIR_RESERVA and descontar_fondo:
-            # Mantenimiento/Otro → usuario confirmó descontar de Reserva General
             fondo_row = db.execute(
                 "SELECT id, nombre FROM fondos WHERE categoria_enlazada IS NULL AND activo=1 LIMIT 1"
             ).fetchone()
@@ -196,12 +224,28 @@ def registrar():
             )
             saldo_resultado = _saldo_fondo(db, fondo_row["id"])
 
+        if recibo_id:
+            recibo = db.execute(
+                "SELECT ruta_imagen FROM recibos WHERE id=?", (recibo_id,)
+            ).fetchone()
+            if recibo:
+                db.execute(
+                    "UPDATE recibos SET gasto_extra_id=?, procesado_por_ia=1 WHERE id=?",
+                    (nuevo_id, recibo_id),
+                )
+                if recibo["ruta_imagen"]:
+                    db.execute(
+                        "UPDATE gastos_extras SET recibo_path=? WHERE id=?",
+                        (recibo["ruta_imagen"], nuevo_id),
+                    )
+
         db.commit()
 
     log_action(
-        "Gasto registrado: id=%d fecha=%s cat=%s monto=$%.2f desc=%s%s",
+        "Gasto registrado: id=%d fecha=%s cat=%s monto=$%.2f desc=%s%s%s",
         nuevo_id, fecha, categoria, monto, descripcion or "—",
         f" → fondo '{fondo_row['nombre']}'" if fondo_row else "",
+        f" recibo_id={recibo_id}" if recibo_id else "",
     )
 
     resp: dict = {"ok": True, "id": nuevo_id}
@@ -210,6 +254,162 @@ def registrar():
         resp["saldo_negativo"] = saldo_resultado < 0
         resp["nombre_fondo"]   = fondo_row["nombre"]
     return jsonify(resp)
+
+
+# ── API: subir foto de recibo ─────────────────────────────────
+
+@gastos_bp.route("/gastos/recibos/subir", methods=["POST"])
+def subir_recibo():
+    if "imagen" not in request.files:
+        return jsonify({"ok": False, "error": "No se recibió ninguna imagen"}), 400
+
+    archivo = request.files["imagen"]
+    if not archivo.content_type.startswith("image/"):
+        return jsonify({"ok": False, "error": "El archivo no es una imagen válida"}), 400
+
+    data_bytes = archivo.read()
+    if len(data_bytes) > 2 * 1024 * 1024:
+        return jsonify({
+            "ok": False,
+            "error": f"Imagen demasiado grande ({len(data_bytes) // 1024} KB). Máximo 2 MB.",
+        }), 400
+
+    hash_md5 = hashlib.md5(data_bytes).hexdigest()
+
+    with _db() as db:
+        existente = db.execute(
+            "SELECT id, gasto_extra_id, fecha_subida FROM recibos WHERE hash_md5=?",
+            (hash_md5,),
+        ).fetchone()
+
+        if existente:
+            if existente["gasto_extra_id"] is not None:
+                gasto = db.execute(
+                    "SELECT fecha, categoria FROM gastos_extras WHERE id=?",
+                    (existente["gasto_extra_id"],),
+                ).fetchone()
+                desc = (
+                    f"{gasto['categoria']} del {gasto['fecha']}"
+                    if gasto else f"#{existente['gasto_extra_id']}"
+                )
+                return jsonify({
+                    "ok": False,
+                    "error": f"Este recibo ya está asociado al gasto #{existente['gasto_extra_id']} ({desc})",
+                }), 409
+            return jsonify({"ok": True, "recibo_id": existente["id"], "duplicado": True})
+
+        # Guardar archivo en disco
+        hoy = date.today()
+        mes_dir = Config.RECIBOS_DIR / f"{hoy.year}-{hoy.month:02d}"
+        mes_dir.mkdir(parents=True, exist_ok=True)
+
+        cur = db.execute(
+            "INSERT INTO recibos (hash_md5, fecha_subida) VALUES (?, datetime('now','localtime'))",
+            (hash_md5,),
+        )
+        recibo_id = cur.lastrowid
+
+        nombre_original = archivo.filename or "recibo"
+        slug = re.sub(r"[^a-z0-9]+", "-", nombre_original.lower().rsplit(".", 1)[0])[:20] or "recibo"
+        nombre_archivo = f"{recibo_id}_{hoy.isoformat()}_{slug}.jpg"
+        ruta_abs = mes_dir / nombre_archivo
+        ruta_abs.write_bytes(data_bytes)
+
+        ruta_rel = str(ruta_abs.relative_to(Config.BASE_DIR)).replace("\\", "/")
+        db.execute("UPDATE recibos SET ruta_imagen=? WHERE id=?", (ruta_rel, recibo_id))
+        db.commit()
+
+    log_action("Recibo subido: id=%d hash=%s…%s ruta=%s", recibo_id, hash_md5[:8], hash_md5[-4:], ruta_rel)
+    return jsonify({"ok": True, "recibo_id": recibo_id, "duplicado": False})
+
+
+# ── API: analizar recibo con Claude ──────────────────────────
+
+@gastos_bp.route("/gastos/recibos/<int:recibo_id>/analizar", methods=["POST"])
+def analizar_recibo(recibo_id):
+    with _db() as db:
+        recibo = db.execute(
+            "SELECT ruta_imagen FROM recibos WHERE id=?", (recibo_id,)
+        ).fetchone()
+
+    if not recibo or not recibo["ruta_imagen"]:
+        return jsonify({"ok": False, "error": "Recibo no encontrado"}), 404
+
+    ruta = Config.BASE_DIR / recibo["ruta_imagen"]
+    if not ruta.exists():
+        return jsonify({"ok": False, "error": "Archivo de imagen no encontrado en disco"}), 404
+
+    img_b64 = base64.b64encode(ruta.read_bytes()).decode()
+
+    resp = call_claude(
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": img_b64,
+                    },
+                },
+                {"type": "text", "text": PROMPT_RECIBO},
+            ],
+        }],
+        model="claude-sonnet-4-6",
+        max_tokens=200,
+        modulo_origen="recibos",
+    )
+
+    if resp["error"]:
+        return jsonify({"ok": False, "error": resp["error"], "costo_usd": resp["costo_usd"]})
+
+    texto = (resp["text"] or "").strip()
+    texto = re.sub(r"```(?:json)?\s*", "", texto).strip().rstrip("`").strip()
+
+    try:
+        datos = json.loads(texto)
+    except (json.JSONDecodeError, ValueError):
+        return jsonify({
+            "ok": False,
+            "error": "La IA no devolvió un JSON válido. Puedes llenar el formulario manualmente.",
+            "costo_usd": resp["costo_usd"],
+        })
+
+    categoria = datos.get("categoria_sugerida")
+    confianza = datos.get("confianza") or "baja"
+    if categoria not in CATEGORIAS:
+        categoria = "Otro"
+        confianza = "baja"
+
+    concepto = str(datos.get("concepto") or "")[:60] or None
+
+    try:
+        monto = float(datos["monto"]) if datos.get("monto") is not None else None
+    except (TypeError, ValueError):
+        monto = None
+
+    fecha = datos.get("fecha")
+    if fecha:
+        try:
+            date.fromisoformat(str(fecha))
+            fecha = str(fecha)
+        except ValueError:
+            fecha = None
+
+    log_action(
+        "Recibo analizado: id=%d cat=%s monto=%s confianza=%s costo=$%.6f",
+        recibo_id, categoria, monto, confianza, resp["costo_usd"],
+    )
+    return jsonify({
+        "ok": True,
+        "concepto": concepto,
+        "monto": monto,
+        "fecha": fecha,
+        "categoria_sugerida": categoria,
+        "confianza": confianza,
+        "costo_usd": resp["costo_usd"],
+    })
 
 
 # ── API: editar ───────────────────────────────────────────────

@@ -26,6 +26,8 @@ class Config:
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
     # --- Rutas ---
+    BASE_DIR = BASE_DIR
     DB_PATH = BASE_DIR / "database" / "sme.db"
     UPLOADS_DIR = BASE_DIR / "uploads" / "recibos"
+    RECIBOS_DIR = BASE_DIR / "database" / "recibos"
     LOGS_DIR = BASE_DIR / "logs"

@@ -9,117 +9,197 @@
 {% block content %}
 <div class="dashboard">
 
-    <!-- 3 tarjetas grandes -->
+    {# ── Banner aportes pendientes ──────────────────────────── #}
+    {% if aportes_pendientes %}
+    <div class="banner-aportes">
+        <div class="banner-aportes__msg">
+            <span class="banner-aportes__dot"></span>
+            Aportes pendientes:&nbsp;
+            {% for ap in aportes_pendientes %}
+            <strong>{{ ap.nombre }} ({{ ap.aporte_periodico | moneda }})</strong>{% if not loop.last %} &middot; {% endif %}
+            {% endfor %}
+        </div>
+        <a href="/fondos" class="btn btn--sm">Ir a confirmar</a>
+    </div>
+    {% endif %}
+
+    {# ── 3 tarjetas del día ─────────────────────────────────── #}
     <section class="cards-grid">
         <div class="card card--accent-income">
-            <div class="card__label"><span class="card__accent-dot"></span> Ingresos del dia</div>
-            <div class="card__value">$0</div>
-            <p class="empty-note">Sin datos aun</p>
+            <div class="card__label"><span class="card__accent-dot"></span> Ingresos del día</div>
+            <div class="card__value">{{ ing_dia | moneda }}</div>
+            {% if ing_dia == 0 %}<p class="empty-note">Sin registros hoy</p>{% endif %}
         </div>
         <div class="card card--accent-expense">
-            <div class="card__label"><span class="card__accent-dot"></span> Gastos del dia</div>
-            <div class="card__value">$0</div>
-            <p class="empty-note">Sin datos aun</p>
+            <div class="card__label"><span class="card__accent-dot"></span> Gastos del día</div>
+            <div class="card__value">{{ gas_dia | moneda }}</div>
+            {% if gas_dia == 0 %}<p class="empty-note">Sin registros hoy</p>{% endif %}
         </div>
         <div class="card card--accent-net">
             <div class="card__label"><span class="card__accent-dot"></span> Ganancia neta</div>
-            <div class="card__value">$0</div>
-            <p class="empty-note">Sin datos aun</p>
+            <div class="card__value {{ 'val--neg' if gan_dia < 0 }}">{{ gan_dia | moneda }}</div>
         </div>
     </section>
 
-    <!-- 2 tarjetas medianas -->
-    <section class="cards-grid cards-grid--medium">
-        <div class="card">
-            <div class="card__label">Fondo de reserva</div>
-            <div class="card__value" style="font-size: var(--text-2xl);">$0 <span class="placeholder-tag">meta $20,000</span></div>
-            <div class="progress">
-                <div class="progress__track"><div class="progress__fill" style="width: 0%;"></div></div>
-                <div class="progress__meta"><span>0% de la meta</span><span>Sin datos aun</span></div>
+    {# ── Resumen de la semana (4 columnas) ──────────────────── #}
+    <section class="card">
+        <div class="card__label">Resumen de la semana</div>
+        <div class="semana-grid">
+            <div class="semana-col">
+                <span class="semana-col__label">Ingresos</span>
+                <span class="semana-col__value semana-col__value--income">{{ ing_sem | moneda }}</span>
+            </div>
+            <div class="semana-col semana-col--sep">
+                <span class="semana-col__label">Gastos</span>
+                <span class="semana-col__value semana-col__value--expense">{{ gas_sem | moneda }}</span>
+            </div>
+            <div class="semana-col semana-col--sep">
+                <span class="semana-col__label">Utilidad neta</span>
+                <span class="semana-col__value {{ 'val--neg' if utilidad_sem < 0 }}">{{ utilidad_sem | moneda }}</span>
+            </div>
+            <div class="semana-col semana-col--sep">
+                <span class="semana-col__label">Tu parte (50%)</span>
+                <span class="semana-col__value semana-col__value--fund {{ 'val--neg' if tu_parte < 0 }}">{{ tu_parte | moneda }}</span>
             </div>
         </div>
-        <div class="card">
-            <div class="card__label">Resumen de la semana</div>
-            <ul class="summary-list">
-                <li><span>Ingresos</span><span>$0</span></li>
-                <li><span>Gastos</span><span>$0</span></li>
-                <li><span>Utilidad neta</span><span>$0</span></li>
-                <li><span>Tu parte (50%)</span><span>$0</span></li>
-            </ul>
+    </section>
+
+    {# ── Gráfica ingresos — últimos 7 días ──────────────────── #}
+    <section class="card">
+        <div class="section-title">Ingresos — últimos 7 días</div>
+        <div class="chart-wrap">
+            {% for d in chart_dias %}
+            <div class="chart-col">
+                <span class="chart-col__value">{% if d.total > 0 %}{{ d.total | moneda }}{% endif %}</span>
+                <div class="chart-col__bar-area">
+                    <div class="chart-col__bar {{ 'chart-col__bar--hoy' if d.es_hoy }}"
+                         style="height: {{ d.pct }}%;"></div>
+                </div>
+                <span class="chart-col__label {{ 'chart-col__label--hoy' if d.es_hoy }}">{{ d.label }}</span>
+            </div>
+            {% endfor %}
         </div>
     </section>
 
-    <!-- Grafica de ingresos (placeholder) -->
+    {# ── Tabla de turnos — semana actual ────────────────────── #}
     <section class="card">
-        <div class="section-title">Ingresos - ultimos 7 dias</div>
-        <div class="chart-placeholder">Grafica de ingresos (se llena con datos en Fase 1)</div>
-    </section>
-
-    <!-- Tabla semanal de turnos -->
-    <section class="card">
-        <div class="section-title">Turnos de la semana <span class="placeholder-tag">datos de ejemplo</span></div>
+        <div class="section-title">Turnos de la semana</div>
         <div class="shift-table-wrap">
             <table class="shift-table">
                 <thead>
                     <tr>
                         <th>Turno</th>
-                        <th>Lun</th><th>Mar</th><th>Mie</th><th>Jue</th><th>Vie</th><th>Sab</th><th>Dom</th>
+                        {% for di in dias_info %}
+                        <th>{{ di.label }}</th>
+                        {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
+                    {% for row in turnos_rows %}
                     <tr>
-                        <th>Manana</th>
-                        <td><span class="shift-pill shift-pill--employee">Wendy</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Wendy</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Martha</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Wendy</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Wendy</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Vivina</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Vivina</span></td>
+                        <th>{{ row.label }}</th>
+                        {% for di in dias_info %}
+                        <td>
+                            {% for emp in turno_matrix[row.key][di.fecha] %}
+                            <span class="shift-pill {{ 'shift-pill--turi' if emp.es_socio else 'shift-pill--employee' }}">{{ emp.nombre }}</span>
+                            {% endfor %}
+                            {% if not turno_matrix[row.key][di.fecha] %}
+                            <span class="shift-empty">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
                     </tr>
-                    <tr>
-                        <th>Tarde</th>
-                        <td><span class="shift-pill shift-pill--employee">Dulce</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Dulce</span></td>
-                        <td><span class="shift-pill shift-pill--turi">Turi</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Dulce</span></td>
-                        <td><span class="shift-pill shift-pill--turi">Turi</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Cecy</span></td>
-                        <td><span class="shift-pill shift-pill--turi">Turi</span></td>
-                    </tr>
-                    <tr>
-                        <th>Noche</th>
-                        <td><span class="shift-pill shift-pill--employee">Goyo</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Goyo</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Goyo</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Goyo</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Carmelo</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Carmelo</span></td>
-                        <td><span class="shift-pill shift-pill--employee">Carmelo</span></td>
-                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
     </section>
 
-    <!-- Pendientes / recordatorios -->
-    <section class="card">
-        <div class="section-title">Pendientes <span class="placeholder-tag">ejemplo</span></div>
-        <div class="reminders">
-            <div class="reminder">
-                <div class="reminder__text"><span class="reminder__dot"></span> Renta pendiente</div>
-                <button class="btn">Marcar pagada</button>
+    {# ── 2 tarjetas: Fondo Reserva + Clima ──────────────────── #}
+    <section class="cards-grid cards-grid--medium">
+        <div class="card">
+            {% if reserva %}
+            <div class="card__label">Fondo {{ reserva.nombre }}</div>
+            <div class="card__value" style="font-size: var(--text-2xl);">
+                {{ reserva.saldo | moneda }}
+                <span style="font-size: var(--text-sm); color: var(--text-tertiary); font-family: var(--font-sans);">meta {{ reserva.meta | moneda }}</span>
             </div>
-            <div class="reminder">
-                <div class="reminder__text"><span class="reminder__dot"></span> Pagar CFE</div>
-                <button class="btn">Marcar pagada</button>
+            <div class="progress">
+                <div class="progress__track">
+                    <div class="progress__fill" style="width: {{ reserva.pct }}%;"></div>
+                </div>
+                <div class="progress__meta">
+                    <span>{{ reserva.pct }}% de la meta</span>
+                </div>
             </div>
-            <div class="reminder">
-                <div class="reminder__text"><span class="reminder__dot"></span> Hoy es sabado, no olvides el conteo</div>
-                <button class="btn btn--ghost">Ir al conteo</button>
-            </div>
+            {% else %}
+            <div class="card__label">Fondo Reserva</div>
+            <p class="empty-note">Sin fondo activo llamado "Reserva"</p>
+            {% endif %}
+        </div>
+        <div class="card">
+            <div class="card__label">Clima</div>
+            <div class="card__value" style="font-size: var(--text-xl); font-family: var(--font-sans);">{{ clima }}</div>
+            <p class="empty-note" style="margin-top: var(--space-3);">Aguascalientes — placeholder estático</p>
         </div>
     </section>
 
+    {# ── Pendientes — recordatorios reales ──────────────────── #}
+    <section class="card">
+        <div class="section-title">Pendientes</div>
+        {% if recordatorios %}
+        <div class="reminders" id="reminders-list">
+            {% for r in recordatorios %}
+            <div class="reminder" id="reminder-{{ r.id }}">
+                <div class="reminder__text">
+                    <span class="reminder__dot"></span>
+                    <span class="reminder__concepto">{{ r.concepto }}</span>
+                    <span class="reminder__monto">{{ r.monto_estimado | moneda }}</span>
+                    <span class="reminder__dias {{ 'reminder__dias--urgente' if r.dias_faltantes == 0 }}">{{ r.texto_dias }}</span>
+                </div>
+                <button class="btn" data-action="marcar-pagada" data-gasto-fijo-id="{{ r.id }}">Marcar pagada</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-note" id="reminders-empty">Sin gastos fijos próximos en los siguientes 15 días.</p>
+        {% endif %}
+    </section>
+
 </div>
+
+<script>
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-action="marcar-pagada"]');
+    if (!btn) return;
+    var id = btn.dataset.gastoFijoId;
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    fetch('/dashboard/api/marcar-pagada', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gasto_fijo_id: parseInt(id) })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+        if (data.ok) {
+            var card = document.getElementById('reminder-' + id);
+            if (card) card.remove();
+            var list = document.getElementById('reminders-list');
+            if (list && !list.querySelector('.reminder')) {
+                list.insertAdjacentHTML('afterend',
+                    '<p class="empty-note" id="reminders-empty">Sin gastos fijos próximos en los siguientes 15 días.</p>');
+                list.remove();
+            }
+        } else {
+            btn.disabled = false;
+            btn.textContent = 'Marcar pagada';
+        }
+    })
+    .catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Marcar pagada';
+    });
+});
+</script>
 {% endblock %}

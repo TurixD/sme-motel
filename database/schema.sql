@@ -223,10 +223,11 @@ CREATE TABLE IF NOT EXISTS recibos (
     fecha_recibo           TEXT,                           -- date
     proveedor              TEXT,
     monto_total            REAL,
-    ruta_imagen            TEXT,                            -- path local
-    procesado_por_ia       INTEGER NOT NULL DEFAULT 0,      -- boolean
-    gasto_extra_id         INTEGER,                         -- FK
-    inventario_actualizado INTEGER NOT NULL DEFAULT 0,      -- boolean
+    ruta_imagen            TEXT,                           -- path relativo al proyecto
+    hash_md5               TEXT,                           -- para detectar duplicados
+    procesado_por_ia       INTEGER NOT NULL DEFAULT 0,     -- boolean
+    gasto_extra_id         INTEGER,                        -- FK
+    inventario_actualizado INTEGER NOT NULL DEFAULT 0,     -- boolean
     notas                  TEXT,
     FOREIGN KEY (gasto_extra_id) REFERENCES gastos_extras(id)
 );

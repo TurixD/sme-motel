@@ -51,6 +51,39 @@
     </div>
 </div>
 
+<!-- Sección: subir recibo con foto -->
+<div class="card recibo-card">
+    <button class="recibo-toggle" id="btn-toggle-recibo" type="button" aria-expanded="false">
+        <span class="recibo-toggle__left">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Subir recibo con foto
+            <span class="recibo-ia-badge">IA</span>
+        </span>
+        <svg class="recibo-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div id="recibo-panel" hidden>
+        <div class="recibo-body">
+            <div id="recibo-dropzone" class="recibo-dropzone">
+                <input type="file" id="recibo-file" accept="image/*" capture="environment" hidden>
+                <label for="recibo-file" class="recibo-dropzone__label">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-tertiary)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>Toca para seleccionar o fotografiar un recibo</span>
+                    <span class="recibo-dropzone__hint">JPEG, PNG o HEIC · máximo 2 MB después de comprimir</span>
+                </label>
+            </div>
+            <div id="recibo-preview-wrap" class="recibo-preview-wrap" hidden>
+                <img id="recibo-preview" class="recibo-preview-img" src="" alt="Vista previa del recibo">
+                <button class="btn btn--ghost btn--sm" id="btn-cambiar-foto" type="button">Cambiar foto</button>
+            </div>
+            <button class="btn btn--ia btn--full" id="btn-procesar-ia" type="button" hidden>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Procesar con IA
+            </button>
+            <div id="recibo-estado" class="recibo-estado" hidden></div>
+        </div>
+    </div>
+</div>
+
 <!-- Formulario de registro -->
 <div class="card form-section">
     <h2 class="form-title" style="margin-bottom:var(--space-6)">Registrar gasto</h2>
@@ -87,6 +120,7 @@
                       id="descripcion" name="descripcion" rows="2"
                       placeholder="Detalle del gasto…"></textarea>
         </div>
+        <input type="hidden" id="recibo-id-hidden" value="">
         <button type="submit" class="btn btn--expense btn--full" id="btn-registrar">
             Registrar gasto
         </button>
@@ -255,6 +289,7 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/recibos.js') }}" defer></script>
 <script>
 'use strict';
 
@@ -376,11 +411,13 @@ document.getElementById('form-gasto').addEventListener('submit', async e => {
     e.preventDefault();
     const btn = document.getElementById('btn-registrar');
 
+    const reciboId = document.getElementById('recibo-id-hidden').value;
     const data = {
         fecha:       document.getElementById('fecha').value,
         categoria:   document.getElementById('categoria').value,
         monto:       parseFloat(document.getElementById('monto').value) || 0,
         descripcion: document.getElementById('descripcion').value.trim(),
+        ...(reciboId ? { recibo_id: parseInt(reciboId, 10) } : {}),
     };
 
     if (!data.categoria) {
