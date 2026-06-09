@@ -142,6 +142,60 @@
         <div class="accordion-panel" id="panel-ia" role="region" aria-labelledby="btn-acc-ia">
             <div class="accordion-body">
 
+                <!-- Uso del mes -->
+                {% set limite_ia = config.get('limite_mensual_ia_usd', '5.00') | float %}
+                {% set pct_ia = [((uso_ia.costo_usd / limite_ia * 100) | int), 100] | min if limite_ia > 0 else 0 %}
+                <div class="ia-uso-bloque">
+                    <div class="ia-uso-stats">
+                        <div class="ia-uso-stat">
+                            <span class="ia-uso-stat__valor mono">${{ "%.4f" | format(uso_ia.costo_usd) }}</span>
+                            <span class="ia-uso-stat__label">gastado este mes</span>
+                        </div>
+                        <div class="ia-uso-stat">
+                            <span class="ia-uso-stat__valor mono">{{ uso_ia.total }}</span>
+                            <span class="ia-uso-stat__label">llamadas totales</span>
+                        </div>
+                        <div class="ia-uso-stat">
+                            <span class="ia-uso-stat__valor mono" style="color:var(--green-500)">{{ uso_ia.exitosas }}</span>
+                            <span class="ia-uso-stat__label">exitosas</span>
+                        </div>
+                        {% if uso_ia.fallidas > 0 %}
+                        <div class="ia-uso-stat">
+                            <span class="ia-uso-stat__valor mono" style="color:var(--red-500)">{{ uso_ia.fallidas }}</span>
+                            <span class="ia-uso-stat__label">fallidas</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="ia-uso-barra-wrap">
+                        <div class="ia-uso-barra-label">
+                            <span>Uso vs límite mensual</span>
+                            <span class="mono">${{ "%.4f" | format(uso_ia.costo_usd) }} / ${{ "%.2f" | format(limite_ia) }} USD</span>
+                        </div>
+                        <div class="ia-uso-barra">
+                            <div class="ia-uso-barra__fill {% if pct_ia >= 90 %}ia-uso-barra__fill--danger{% elif pct_ia >= 70 %}ia-uso-barra__fill--warn{% endif %}"
+                                 style="width:{{ pct_ia }}%"></div>
+                        </div>
+                        <span class="ia-uso-barra-pct text-secondary">{{ pct_ia }}%</span>
+                    </div>
+                </div>
+
+                <!-- Límite mensual -->
+                <div class="config-row">
+                    <div class="config-row__info">
+                        <label class="config-row__label" for="input-limite_mensual_ia_usd">Límite mensual IA</label>
+                        <span class="config-row__hint">Al alcanzarlo, nuevas llamadas a Claude quedan bloqueadas hasta el mes siguiente</span>
+                    </div>
+                    <div class="config-row__control">
+                        <div class="input-suffix" style="width:120px">
+                            <input class="field-input field-input--sm mono" type="number"
+                                   id="input-limite_mensual_ia_usd" min="0.01" step="0.50"
+                                   value="{{ config.get('limite_mensual_ia_usd', '5.00') }}">
+                            <span class="suffix-symbol">USD</span>
+                        </div>
+                        <button class="btn btn--config btn--sm" id="btn-save-limite_mensual_ia_usd">Guardar</button>
+                    </div>
+                </div>
+
                 <div class="config-row">
                     <div class="config-row__info">
                         <label class="config-row__label" for="input-umbral_alerta_gasto_ia_usd">Alerta de gasto IA</label>
@@ -399,6 +453,7 @@
     var configClaves = [
         'comision_tarjeta',
         'tipo_cambio_usd_mxn',
+        'limite_mensual_ia_usd',
         'umbral_alerta_gasto_ia_usd',
         'memoria_asistente_mensajes',
         'timeout_sesion_minutos',

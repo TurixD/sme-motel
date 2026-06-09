@@ -10,6 +10,7 @@ from pathlib import Path
 
 import sqlite3
 from flask import Blueprint, jsonify, render_template, request
+from datetime import date
 
 from config import Config
 from logger import get_logger, log_action
@@ -27,6 +28,7 @@ _CONFIG_RULES: dict[str, tuple] = {
     "comision_tarjeta":           ("pct",       0,    100),
     "tipo_cambio_usd_mxn":        ("decimal",   0.01, None),
     "umbral_alerta_gasto_ia_usd": ("decimal",   0.01, None),
+    "limite_mensual_ia_usd":      ("decimal",   0.01, None),
     "memoria_asistente_mensajes": ("int_range", 1,    50),
     "timeout_sesion_minutos":     ("int",       1,    None),
 }
@@ -42,6 +44,26 @@ def _db():
         yield conn
     finally:
         conn.close()
+
+
+def _uso_ia_mes() -> dict:
+    hoy = date.today()
+    mes_inicio = f"{hoy.year}-{hoy.month:02d}-01"
+    with _db() as db:
+        row = db.execute(
+            "SELECT COUNT(*) AS total, "
+            "COALESCE(SUM(CASE WHEN exito=1 THEN 1 ELSE 0 END), 0) AS exitosas, "
+            "COALESCE(SUM(CASE WHEN exito=0 THEN 1 ELSE 0 END), 0) AS fallidas, "
+            "COALESCE(SUM(costo_usd), 0) AS costo_total "
+            "FROM uso_ia WHERE fecha >= ?",
+            (mes_inicio,),
+        ).fetchone()
+    return {
+        "total":     row["total"] or 0,
+        "exitosas":  row["exitosas"] or 0,
+        "fallidas":  row["fallidas"] or 0,
+        "costo_usd": float(row["costo_total"] or 0),
+    }
 
 
 def _backup_info() -> dict:
@@ -113,6 +135,7 @@ def index():
         fondos=fondos,
         turnos_label=_TURNOS_LABEL,
         backup=_backup_info(),
+        uso_ia=_uso_ia_mes(),
     )
 
 

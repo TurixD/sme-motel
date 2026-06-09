@@ -52,6 +52,46 @@ def crear_bd(reset: bool = False) -> None:
         print(f"  - {nombre}")
 
 
+def migrar() -> None:
+    """Aplica migraciones de esquema sobre BD existente (idempotente)."""
+    if not DB_PATH.exists():
+        sys.exit("ERROR: la BD no existe. Corre primero: python scripts/init_db.py")
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        columnas = {row[1] for row in conn.execute("PRAGMA table_info(uso_ia)").fetchall()}
+        migraciones = 0
+        if "exito" not in columnas:
+            conn.execute("ALTER TABLE uso_ia ADD COLUMN exito INTEGER NOT NULL DEFAULT 1")
+            migraciones += 1
+            print("  uso_ia: columna 'exito' agregada")
+        if "error_message" not in columnas:
+            conn.execute("ALTER TABLE uso_ia ADD COLUMN error_message TEXT")
+            migraciones += 1
+            print("  uso_ia: columna 'error_message' agregada")
+
+        # Agregar config limite_mensual_ia_usd si no existe
+        existe = conn.execute(
+            "SELECT 1 FROM configuracion WHERE clave='limite_mensual_ia_usd'"
+        ).fetchone()
+        if not existe:
+            conn.execute(
+                "INSERT INTO configuracion (clave, valor, descripcion) VALUES (?,?,?)",
+                ("limite_mensual_ia_usd", "5.00",
+                 "Límite mensual de gasto en IA (USD) — bloquea llamadas al superarse"),
+            )
+            migraciones += 1
+            print("  configuracion: clave 'limite_mensual_ia_usd' agregada")
+
+        conn.commit()
+        if migraciones == 0:
+            print("Sin cambios: la BD ya está actualizada.")
+        else:
+            print(f"Migración completada ({migraciones} cambios).")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Inicializa la BD de SME.")
     parser.add_argument(
@@ -59,5 +99,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Borra la BD existente antes de recrearla.",
     )
+    parser.add_argument(
+        "--migrate",
+        action="store_true",
+        help="Aplica migraciones de esquema sobre BD existente (idempotente).",
+    )
     args = parser.parse_args()
-    crear_bd(reset=args.reset)
+    if args.migrate:
+        migrar()
+    else:
+        crear_bd(reset=args.reset)

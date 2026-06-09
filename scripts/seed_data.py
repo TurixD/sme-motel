@@ -57,6 +57,7 @@ CONFIGURACION = [
     ("memoria_asistente_mensajes", "10",      "Mensajes de contexto del asistente IA"),
     ("timeout_sesion_minutos",     "30",      "Minutos de inactividad antes de expirar sesion IA"),
     ("umbral_alerta_gasto_ia_usd", "20",      "Umbral mensual de gasto IA (USD) para alertar"),
+    ("limite_mensual_ia_usd",      "5.00",    "Límite mensual de gasto en IA (USD) — bloquea llamadas al superarse"),
     ("color_turi",                 COLOR_TURI, "Color de Turi en el calendario"),
 ]
 

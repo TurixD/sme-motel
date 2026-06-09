@@ -237,12 +237,14 @@ CREATE TABLE IF NOT EXISTS recibos (
 CREATE TABLE IF NOT EXISTS uso_ia (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     fecha         TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
-    funcion       TEXT,
+    funcion       TEXT,                               -- modulo_origen: 'recibos' | 'asistente' | ...
     modelo        TEXT,
     tokens_input  INTEGER,
     tokens_output INTEGER,
     costo_usd     REAL,
-    costo_mxn     REAL
+    costo_mxn     REAL,
+    exito         INTEGER NOT NULL DEFAULT 1,         -- boolean
+    error_message TEXT
 );
 
 -- -------------------------------------------------------------
