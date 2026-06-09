@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btn-nueva-sesion').addEventListener('click', handleNuevaSesion);
     document.getElementById('btn-enviar').addEventListener('click', handleEnviar);
     document.getElementById('input-mensaje').addEventListener('keydown', handleKeydown);
+    document.getElementById('input-mensaje').addEventListener('input', function () { autoResizeTextarea(this); });
     document.getElementById('chat-area').addEventListener('click', handleChatClick);
 
     // Sugerencias del estado vacío
@@ -137,7 +138,7 @@ function appendChangeCard(cambio) {
     actionsEl.className = 'cambio-card__actions';
 
     var btnConfirmar = document.createElement('button');
-    btnConfirmar.className = 'btn btn--danger btn-confirmar-cambio';
+    btnConfirmar.className = (esDanger ? 'btn btn--expense' : 'btn btn--fund') + ' btn-confirmar-cambio';
     btnConfirmar.dataset.cambioId = cambio.id;
     btnConfirmar.textContent = 'Confirmar';
     if (esDanger) btnConfirmar.disabled = true;
@@ -163,10 +164,10 @@ function appendChangeCard(cambio) {
         confirmInput.placeholder = 'Escribe CONFIRMAR para habilitar';
         confirmInputWrap.appendChild(confirmInput);
         card.appendChild(confirmInputWrap);
-        wireDeleteCard(card);
     }
 
     card.appendChild(actionsEl);
+    if (esDanger) wireDeleteCard(card);
     chatArea.insertBefore(card, loading);
     scrollToBottom();
 }
@@ -176,7 +177,7 @@ function wireDeleteCard(card) {
     var btnConfirmar = card.querySelector('.btn-confirmar-cambio');
     if (!input || !btnConfirmar) return;
     input.addEventListener('input', function () {
-        btnConfirmar.disabled = (input.value !== 'CONFIRMAR');
+        btnConfirmar.disabled = (input.value.trim().toUpperCase() !== 'CONFIRMAR');
     });
 }
 
@@ -210,8 +211,10 @@ function confirmarCambio(id) {
             actionsEl.innerHTML = '';
             var status = document.createElement('span');
             status.className = 'cambio-card__status';
-            status.textContent = 'Ejecutado — ' + data.registros_afectados + ' registro(s) afectado(s).';
+            status.textContent = 'Ejecutado';
             actionsEl.appendChild(status);
+            appendMessage('assistant', data.mensaje);
+            scrollToBottom();
         } else {
             btnConfirmar.disabled = false;
             if (btnCancelar) btnCancelar.disabled = false;
@@ -241,6 +244,8 @@ function cancelarCambio(id) {
             status.className = 'cambio-card__status cambio-card__status--cancelado';
             status.textContent = 'Cancelado';
             actionsEl.appendChild(status);
+            appendMessage('assistant', data.mensaje);
+            scrollToBottom();
         }
     });
 }
@@ -289,14 +294,5 @@ function mostrarVacio() {
 
 function autoResizeTextarea(el) {
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    el.style.height = Math.min(el.scrollHeight, 5 * 24) + 'px';
 }
-
-document.addEventListener('DOMContentLoaded', function () {
-    var textarea = document.getElementById('input-mensaje');
-    if (textarea) {
-        textarea.addEventListener('input', function () {
-            autoResizeTextarea(this);
-        });
-    }
-});

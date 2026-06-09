@@ -60,7 +60,7 @@
             </div>
             {% endif %}
             <div class="cambio-card__actions">
-                <button class="btn btn--danger btn-confirmar-cambio"
+                <button class="btn {% if cambio.tipo == 'DELETE' %}btn--expense{% else %}btn--fund{% endif %} btn-confirmar-cambio"
                         data-cambio-id="{{ cambio.id }}"
                         {% if cambio.tipo == 'DELETE' %}disabled{% endif %}>
                     Confirmar
