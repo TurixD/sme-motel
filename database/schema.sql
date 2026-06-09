@@ -286,6 +286,21 @@ CREATE TABLE IF NOT EXISTS conversaciones_ia (
 );
 
 -- -------------------------------------------------------------
+-- 4.20 reportes_narrativas (Sub-fase 3C)
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reportes_narrativas (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo            TEXT    NOT NULL,  -- 'semanal' | 'mensual'
+    periodo_clave   TEXT    NOT NULL,  -- 'semana_2026-05-25' | 'mes_2026-05'
+    parrafo         TEXT    NOT NULL,
+    bullets         TEXT    NOT NULL,  -- JSON array de 3 strings
+    hash_datos      TEXT    NOT NULL,  -- MD5 de los 5 agregados clave
+    costo_usd       REAL    NOT NULL,
+    fecha_generada  TEXT    NOT NULL,  -- 'YYYY-MM-DD HH:MM'
+    UNIQUE(tipo, periodo_clave)
+);
+
+-- -------------------------------------------------------------
 -- Indices utiles para consultas frecuentes
 -- -------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_ingresos_fecha            ON ingresos_diarios(fecha);

@@ -97,6 +97,27 @@ def migrar() -> None:
             migraciones += 1
             print("  configuracion: clave 'limite_mensual_ia_usd' agregada")
 
+        # reportes_narrativas
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "reportes_narrativas" not in tablas:
+            conn.execute("""
+                CREATE TABLE reportes_narrativas (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tipo            TEXT    NOT NULL,
+                    periodo_clave   TEXT    NOT NULL,
+                    parrafo         TEXT    NOT NULL,
+                    bullets         TEXT    NOT NULL,
+                    hash_datos      TEXT    NOT NULL,
+                    costo_usd       REAL    NOT NULL,
+                    fecha_generada  TEXT    NOT NULL,
+                    UNIQUE(tipo, periodo_clave)
+                )
+            """)
+            migraciones += 1
+            print("  reportes_narrativas: tabla creada")
+
         conn.commit()
         if migraciones == 0:
             print("Sin cambios: la BD ya está actualizada.")

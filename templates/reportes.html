@@ -33,6 +33,9 @@
 <!-- Estado de carga -->
 <div class="loading-state" id="loading-state" hidden>Cargando reporte…</div>
 
+<!-- Narrativa IA (visible solo en Semanal y Mensual) -->
+<div id="narrativa-bloque" hidden></div>
+
 <!-- Contenido renderizado por JS -->
 <div id="reporte-content"></div>
 
@@ -83,6 +86,101 @@ function deltaHtml(d, invertir) {
     return `<span class="tarjeta-delta ${cls}">${icon} ${Math.abs(d)}%</span>`;
 }
 
+/* ─── Narrativa IA ───────────────────────────────────────── */
+function renderNarrativaSkeleton() {
+    return `<div class="card narrativa-card seccion">
+        <div class="narrativa-header">
+            <span class="narrativa-titulo">Resumen ejecutivo</span>
+            <span class="badge-ia">IA</span>
+        </div>
+        <div class="narrativa-skeleton">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line skeleton-line--short"></div>
+        </div>
+        <p class="narrativa-cargando-txt">Generando análisis…</p>
+    </div>`;
+}
+
+function renderNarrativaOk(data, tipo, periodoKey) {
+    const bulletsHtml = data.bullets.map(b => `<li>— ${esc(b)}</li>`).join('');
+    const costoStr = data.generada_ahora ? ` (costo: $${data.costo_usd.toFixed(4)} USD)` : '';
+    return `<div class="card narrativa-card seccion">
+        <div class="narrativa-header">
+            <span class="narrativa-titulo">Resumen ejecutivo</span>
+            <span class="badge-ia">IA</span>
+        </div>
+        <p class="narrativa-parrafo">${esc(data.parrafo)}</p>
+        <ul class="narrativa-bullets">${bulletsHtml}</ul>
+        <div class="narrativa-footer">
+            <span class="narrativa-footer-txt">Generada el ${esc(data.fecha_generada)}${esc(costoStr)}</span>
+            <button class="btn btn--ghost btn--sm" id="btn-regenerar"
+                data-tipo="${esc(tipo)}" data-periodo="${esc(periodoKey)}">&#8635; Regenerar</button>
+        </div>
+    </div>`;
+}
+
+function renderNarrativaError(msg) {
+    return `<div class="card narrativa-card seccion">
+        <div class="narrativa-header">
+            <span class="narrativa-titulo">Resumen ejecutivo</span>
+            <span class="badge-ia">IA</span>
+        </div>
+        <p class="narrativa-error-txt">${esc(msg)}</p>
+    </div>`;
+}
+
+function _wireRegenerarBtn(tipo, periodoKey) {
+    const btn = document.getElementById('btn-regenerar');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        regenerarNarrativa(this.dataset.tipo, this.dataset.periodo);
+    });
+}
+
+async function cargarNarrativa(tipo, periodoKey) {
+    const bloque = document.getElementById('narrativa-bloque');
+    bloque.hidden = false;
+    bloque.innerHTML = renderNarrativaSkeleton();
+    try {
+        const data = await fetch(
+            '/reportes/api/narrativa/' + tipo + '/' + periodoKey
+        ).then(r => r.json());
+        if (data.ok) {
+            bloque.innerHTML = renderNarrativaOk(data, tipo, periodoKey);
+            _wireRegenerarBtn(tipo, periodoKey);
+        } else {
+            bloque.innerHTML = renderNarrativaError(data.mensaje || 'Resumen no disponible');
+        }
+    } catch {
+        bloque.innerHTML = renderNarrativaError(
+            'No se pudo generar el resumen. Los datos del reporte siguen disponibles abajo.'
+        );
+    }
+}
+
+async function regenerarNarrativa(tipo, periodoKey) {
+    if (!confirm('¿Regenerar resumen? Esto consumirá aprox. $0.015 USD de tu límite mensual de IA. ¿Continuar?')) {
+        return;
+    }
+    const bloque = document.getElementById('narrativa-bloque');
+    bloque.innerHTML = renderNarrativaSkeleton();
+    try {
+        const data = await fetch(
+            '/reportes/api/narrativa/' + tipo + '/' + periodoKey,
+            { method: 'POST' }
+        ).then(r => r.json());
+        if (data.ok) {
+            bloque.innerHTML = renderNarrativaOk(data, tipo, periodoKey);
+            _wireRegenerarBtn(tipo, periodoKey);
+        } else {
+            bloque.innerHTML = renderNarrativaError(data.mensaje || 'Resumen no disponible');
+        }
+    } catch {
+        bloque.innerHTML = renderNarrativaError('No se pudo regenerar el resumen.');
+    }
+}
+
 /* ─── Cargar reporte ─────────────────────────────────────── */
 async function cargarReporte(tab, param) {
     estado.tab   = tab;
@@ -91,6 +189,9 @@ async function cargarReporte(tab, param) {
     document.getElementById('loading-state').hidden = false;
     document.getElementById('reporte-content').innerHTML = '';
     document.getElementById('period-label').textContent = '…';
+    const narrativaBloque = document.getElementById('narrativa-bloque');
+    narrativaBloque.hidden = true;
+    narrativaBloque.innerHTML = '';
     if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
     let url;
@@ -161,6 +262,14 @@ function renderReport(data, tab) {
     // Init chart después de que el DOM esté actualizado
     if (!esAnual && data.gastos_por_cat && data.gastos_por_cat.length)
         initChart(data.gastos_por_cat);
+
+    // Narrativa IA
+    if (!esAnual) {
+        const periodoKey = tab === 'semanal'
+            ? 'semana_' + data.periodo.desde
+            : 'mes_' + data.periodo.desde.slice(0, 7);
+        cargarNarrativa(tab, periodoKey);
+    }
 }
 
 /* ─── Tarjetas ───────────────────────────────────────────── */
