@@ -486,13 +486,21 @@ def api_ejecutar_cambio(cambio_id):
             cambio_id, cambio["sesion_id"][:8], cambio["tabla"],
             cambio["tipo"], cambio["descripcion_humana"], registros,
         )
+        sesion_id = cambio["sesion_id"]
+        desc = cambio["descripcion_humana"]
+        tipo = cambio["tipo"]
     finally:
         conn.close()
+
+    _verbos = {"INSERT": "creado(s)", "UPDATE": "modificado(s)", "DELETE": "eliminado(s)"}
+    verbo = _verbos.get(tipo, "afectado(s)")
+    mensaje = f"Listo. {desc}. {registros} registro(s) {verbo}."
+    _guardar_mensaje(sesion_id, "assistant", mensaje)
 
     return jsonify({
         "ok": True,
         "registros_afectados": registros,
-        "mensaje": f"Ejecutado — {registros} registro(s) afectado(s).",
+        "mensaje": mensaje,
     })
 
 
@@ -517,9 +525,15 @@ def api_cancelar_cambio(cambio_id):
             "Asistente CANCELADO cambio_id=%d sesion=%s tabla=%s desc='%s'",
             cambio_id, cambio["sesion_id"][:8], cambio["tabla"], cambio["descripcion_humana"],
         )
+        sesion_id = cambio["sesion_id"]
+        desc = cambio["descripcion_humana"]
     finally:
         conn.close()
-    return jsonify({"ok": True})
+
+    mensaje = f"Cambio cancelado: {desc}."
+    _guardar_mensaje(sesion_id, "assistant", mensaje)
+
+    return jsonify({"ok": True, "mensaje": mensaje})
 
 
 @asistente_bp.route("/asistente/api/nueva_sesion")
