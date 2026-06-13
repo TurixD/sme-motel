@@ -53,7 +53,7 @@ PROMPT_RECIBO_SAMS = (
     "{lista_catalogo}\n\n"
     "Para CADA linea del ticket que represente un producto comprado, extrae:\n"
     "- sku_sams: el codigo numerico del producto (6-12 digitos) que aparece antes o junto al texto descriptivo. Si no lo encuentras, pon null.\n"
-    "- texto_ticket: el texto exacto que aparece en el ticket\n"
+    "- texto_ticket: SOLO el texto descriptivo del producto, SIN incluir el sku_sams. Si el SKU aparece junto al texto en el ticket, separalos.\n"
     "- cantidad: numero de unidades compradas\n"
     "- precio_unitario: precio por unidad en MXN\n"
     "- precio_total: cantidad x precio_unitario\n"
@@ -639,6 +639,10 @@ def analizar_recibo(recibo_id):
 
                 for p in lista_prods:
                     sku = _normalizar_sku(p.get("sku_sams"))
+                    texto_ticket_raw = str(p.get("texto_ticket") or "").strip()
+                    if sku and texto_ticket_raw.startswith(sku):
+                        texto_ticket_raw = texto_ticket_raw[len(sku):].strip()
+
                     if sku and sku in aprendidos:
                         aprendido = aprendidos[sku]
                         mid = aprendido["inventario_id"]
@@ -657,7 +661,7 @@ def analizar_recibo(recibo_id):
 
                     productos.append({
                         "sku_sams":            sku,
-                        "texto_ticket":        str(p.get("texto_ticket") or "")[:80],
+                        "texto_ticket":        texto_ticket_raw[:80],
                         "cantidad":            max(0.0, float(p.get("cantidad") or 0)),
                         "precio_unitario":     max(0.0, float(p.get("precio_unitario") or 0)),
                         "precio_total":        max(0.0, float(p.get("precio_total") or 0)),
