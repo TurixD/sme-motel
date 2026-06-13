@@ -43,3 +43,9 @@ reportes/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# SQLite DBs sueltas (la real va en database/)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
