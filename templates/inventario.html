@@ -22,6 +22,17 @@
     </div>
 </div>
 
+<!-- ── Tabs ────────────────────────────────────────────────── -->
+<div class="inv-tabs">
+    <button class="inv-tab inv-tab--active" data-tab="productos">Productos</button>
+    <button class="inv-tab" data-tab="matches">
+        Matches aprendidos<span id="matches-count" class="inv-tab-badge"></span>
+    </button>
+</div>
+
+<!-- ── Tab: Productos ──────────────────────────────────────── -->
+<div id="tab-productos" class="tab-content">
+
 <!-- ── Tabla de productos ──────────────────────────────────── -->
 <div class="card" style="padding:0;overflow:hidden">
     <div class="table-wrap">
@@ -95,6 +106,38 @@
         </table>
     </div>
 </div>
+
+</div><!-- /tab-productos -->
+
+<!-- ── Tab: Matches aprendidos ────────────────────────────── -->
+<div id="tab-matches" class="tab-content" hidden>
+    <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4);flex-wrap:wrap">
+        <input type="text" id="matches-search" class="field-input field-input--sm"
+               placeholder="Buscar SKU o texto del ticket…" style="max-width:320px">
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+        <div class="table-wrap">
+            <table class="tabla" id="matches-tabla">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Texto en ticket</th>
+                        <th>Producto en inventario</th>
+                        <th class="text-right">Veces</th>
+                        <th class="text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="matches-tbody">
+                    <tr>
+                        <td colspan="5" style="text-align:center;padding:2rem;color:var(--text-tertiary)">
+                            Cargando…
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div><!-- /tab-matches -->
 
 <!-- ── Modal: Agregar / Editar producto ───────────────────── -->
 <div id="modal-producto" class="modal" hidden>

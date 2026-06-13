@@ -357,6 +357,68 @@ def guardar_conteo():
     })
 
 
+# ── API matches aprendidos (Sub-fase 5C) ──────────────────────
+
+@inventario_bp.route("/inventario/api/matches")
+def api_matches():
+    with _db() as conn:
+        rows = conn.execute("""
+            SELECT ma.id, ma.sku_sams, ma.texto_ticket, ma.inventario_id,
+                   i.nombre AS producto_nombre, ma.veces_confirmado,
+                   ma.primera_vez, ma.ultima_vez
+            FROM matches_aprendidos ma
+            JOIN inventario i ON i.id = ma.inventario_id
+            ORDER BY ma.ultima_vez DESC
+        """).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@inventario_bp.route("/inventario/api/matches/<int:mid>", methods=["PUT"])
+def actualizar_match(mid: int):
+    data = request.get_json(force=True)
+    try:
+        inv_id = int(data.get("inventario_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "inventario_id inválido"}), 400
+
+    with _db() as conn:
+        match = conn.execute(
+            "SELECT sku_sams FROM matches_aprendidos WHERE id=?", (mid,)
+        ).fetchone()
+        if not match:
+            return jsonify({"ok": False, "error": "Match no encontrado"}), 404
+
+        existe_prod = conn.execute(
+            "SELECT id FROM inventario WHERE id=? AND activo=1", (inv_id,)
+        ).fetchone()
+        if not existe_prod:
+            return jsonify({"ok": False, "error": "Producto no encontrado o inactivo"}), 404
+
+        conn.execute(
+            "UPDATE matches_aprendidos SET inventario_id=?, ultima_vez=datetime('now','localtime') WHERE id=?",
+            (inv_id, mid),
+        )
+        conn.commit()
+
+    log_action(f"matches_aprendidos: actualizado id={mid} sku={match['sku_sams']} → inventario_id={inv_id}")
+    return jsonify({"ok": True})
+
+
+@inventario_bp.route("/inventario/api/matches/<int:mid>", methods=["DELETE"])
+def borrar_match(mid: int):
+    with _db() as conn:
+        match = conn.execute(
+            "SELECT sku_sams FROM matches_aprendidos WHERE id=?", (mid,)
+        ).fetchone()
+        if not match:
+            return jsonify({"ok": False, "error": "Match no encontrado"}), 404
+        conn.execute("DELETE FROM matches_aprendidos WHERE id=?", (mid,))
+        conn.commit()
+
+    log_action(f"matches_aprendidos: borrado id={mid} sku={match['sku_sams']}")
+    return jsonify({"ok": True})
+
+
 # ── API stock JSON ─────────────────────────────────────────────
 
 @inventario_bp.route("/inventario/api/stock")

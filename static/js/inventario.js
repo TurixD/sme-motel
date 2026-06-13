@@ -218,6 +218,154 @@ function cargarMasHistorial() {
     _cargarHistorial(false);
 }
 
+/* ── Tabs (Sub-fase 5C) ────────────────────────────────────── */
+let _catalogoInventario = null;
+let _matchesData = [];
+
+function _initTabs() {
+    document.querySelectorAll(".inv-tab").forEach((btn) => {
+        btn.addEventListener("click", function () {
+            document.querySelectorAll(".inv-tab").forEach((b) => b.classList.remove("inv-tab--active"));
+            this.classList.add("inv-tab--active");
+            document.querySelectorAll(".tab-content").forEach((el) => (el.hidden = true));
+            const target = document.getElementById("tab-" + this.dataset.tab);
+            if (target) target.hidden = false;
+            if (this.dataset.tab === "matches") _cargarMatches();
+        });
+    });
+
+    const searchInp = document.getElementById("matches-search");
+    if (searchInp) {
+        searchInp.addEventListener("input", function () {
+            const q = this.value.toLowerCase();
+            const filtrado = _matchesData.filter(
+                (m) => m.sku_sams.toLowerCase().includes(q) || m.texto_ticket.toLowerCase().includes(q)
+            );
+            _renderMatches(filtrado);
+        });
+    }
+}
+
+async function _cargarMatches() {
+    const tbody = document.getElementById("matches-tbody");
+    if (!tbody) return;
+    tbody.innerHTML =
+        '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-tertiary)">Cargando…</td></tr>';
+
+    try {
+        if (!_catalogoInventario) {
+            const r = await fetch("/inventario/api/stock");
+            _catalogoInventario = (await r.json()).map((p) => ({ id: p.id, nombre: p.nombre }));
+        }
+        const r2 = await fetch("/inventario/api/matches");
+        _matchesData = await r2.json();
+        _renderMatches(_matchesData);
+
+        const badge = document.getElementById("matches-count");
+        if (badge) badge.textContent = _matchesData.length > 0 ? String(_matchesData.length) : "";
+    } catch {
+        if (tbody)
+            tbody.innerHTML =
+                '<tr><td colspan="5" style="text-align:center;color:var(--accent-expense)">Error al cargar</td></tr>';
+    }
+}
+
+function _renderMatches(data) {
+    const tbody = document.getElementById("matches-tbody");
+    if (!tbody) return;
+    if (!data.length) {
+        tbody.innerHTML =
+            '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-tertiary)">Sin matches aprendidos todavía</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = "";
+    const catalog = _catalogoInventario || [];
+
+    data.forEach((m) => {
+        const tr = document.createElement("tr");
+
+        let opts = "";
+        catalog.forEach((c) => {
+            opts += `<option value="${c.id}"${c.id === m.inventario_id ? " selected" : ""}>${_escMatch(c.nombre)}</option>`;
+        });
+
+        tr.innerHTML = `
+            <td class="matches-sku">${_escMatch(m.sku_sams)}</td>
+            <td class="matches-texto" title="${_escMatch(m.texto_ticket)}">${_escMatch(m.texto_ticket)}</td>
+            <td><select class="field-input field-input--sm match-inv-sel" style="min-width:180px">${opts}</select></td>
+            <td class="text-right text-muted" title="Primera vez: ${_escMatch(m.primera_vez || '')}\nÚltima vez: ${_escMatch(m.ultima_vez || '')}">${m.veces_confirmado}</td>
+            <td class="text-right">
+                <button class="btn-icon btn-icon--danger match-del-btn" title="Borrar match" data-match-id="${m.id}" data-sku="${_escMatch(m.sku_sams)}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                        <path d="M10 11v6"/><path d="M14 11v6"/>
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    </svg>
+                </button>
+            </td>
+        `;
+
+        const sel = tr.querySelector(".match-inv-sel");
+        let invIdActual = m.inventario_id;
+        sel.addEventListener("change", async function () {
+            const nuevoId = parseInt(this.value, 10);
+            if (nuevoId === invIdActual) return;
+            const oldNombre = catalog.find((c) => c.id === invIdActual)?.nombre || "(anterior)";
+            const newNombre = catalog.find((c) => c.id === nuevoId)?.nombre || "(nuevo)";
+            if (!confirm(`¿Cambiar match del SKU ${m.sku_sams} de "${oldNombre}" a "${newNombre}"?`)) {
+                this.value = invIdActual;
+                return;
+            }
+            try {
+                const r = await fetch(`/inventario/api/matches/${m.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ inventario_id: nuevoId }),
+                });
+                const res = await r.json();
+                if (res.ok) {
+                    invIdActual = nuevoId;
+                    m.inventario_id = nuevoId;
+                    toast("Match actualizado", "success");
+                } else {
+                    this.value = invIdActual;
+                    toast(res.error || "Error al actualizar", "error");
+                }
+            } catch {
+                this.value = invIdActual;
+                toast("Error de conexión", "error");
+            }
+        });
+
+        const delBtn = tr.querySelector(".match-del-btn");
+        delBtn.addEventListener("click", async function () {
+            const matchId = parseInt(this.dataset.matchId, 10);
+            const sku = this.dataset.sku;
+            if (!confirm(`¿Borrar el match aprendido para SKU ${sku}?\nEn el próximo ticket, este producto volverá a pedirse a la IA.`)) return;
+            try {
+                const r = await fetch(`/inventario/api/matches/${matchId}`, { method: "DELETE" });
+                const res = await r.json();
+                if (res.ok) {
+                    toast("Match borrado", "success");
+                    _cargarMatches();
+                } else {
+                    toast(res.error || "Error al borrar", "error");
+                }
+            } catch {
+                toast("Error de conexión", "error");
+            }
+        });
+
+        tbody.appendChild(tr);
+    });
+}
+
+function _escMatch(s) {
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 /* ── Init ──────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
     // Cerrar modales al click en backdrop
@@ -235,4 +383,6 @@ document.addEventListener("DOMContentLoaded", () => {
             guardarProducto();
         }
     });
+
+    _initTabs();
 });

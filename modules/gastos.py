@@ -47,6 +47,55 @@ PROMPT_RECIBO = (
     "Si no puedes leer algun dato con certeza, ponlo como null."
 )
 
+PROMPT_RECIBO_SAMS = (
+    "Eres un asistente analizando un ticket de Sam's Club de un motel en Aguascalientes, Mexico.\n\n"
+    "Catalogo de productos disponibles en inventario (usa los IDs y nombres EXACTOS):\n"
+    "{lista_catalogo}\n\n"
+    "Para CADA linea del ticket que represente un producto comprado, extrae:\n"
+    "- sku_sams: el codigo numerico del producto (6-12 digitos) que aparece antes o junto al texto descriptivo. Si no lo encuentras, pon null.\n"
+    "- texto_ticket: el texto exacto que aparece en el ticket\n"
+    "- cantidad: numero de unidades compradas\n"
+    "- precio_unitario: precio por unidad en MXN\n"
+    "- precio_total: cantidad x precio_unitario\n"
+    "- match_producto_id: ID del catalogo que mejor coincide, o null si no hay match razonable\n"
+    "- match_producto_nombre: nombre del catalogo matcheado, o null si no hay match\n"
+    "- confianza_match: 'alta' / 'media' / 'baja' / 'sin_match'\n\n"
+    "Reglas criticas:\n"
+    "- El SKU es un numero de 6-12 digitos que identifica al producto en Sam's. Aparece tipicamente antes o al lado del texto descriptivo.\n"
+    "- Si una linea no tiene SKU claramente identificable, pon sku_sams: null.\n"
+    "- NUNCA uses un ID que no aparezca en la lista de arriba.\n"
+    "- Si el texto es ambiguo, prefiere sin_match antes que adivinar.\n"
+    "- 'alta': el nombre del catalogo describe claramente el mismo producto.\n"
+    "- 'media': alta probabilidad pero nombres no identicos (ej. 'MM AGU 500' -> 'Agua 500ml').\n"
+    "- 'baja': plausible pero podria ser otra cosa.\n"
+    "- Ignora lineas de impuestos, descuentos, totales y folio — esas NO son productos.\n\n"
+    "Responde SOLO con este JSON, sin texto adicional:\n"
+    '{\n'
+    '  "productos": [\n'
+    '    {\n'
+    '      "sku_sams": "980037346",\n'
+    '      "texto_ticket": "...",\n'
+    '      "cantidad": 0,\n'
+    '      "precio_unitario": 0.00,\n'
+    '      "precio_total": 0.00,\n'
+    '      "match_producto_id": null,\n'
+    '      "match_producto_nombre": null,\n'
+    '      "confianza_match": "alta"\n'
+    '    }\n'
+    '  ]\n'
+    '}'
+)
+
+
+def _normalizar_sku(sku_raw) -> str | None:
+    """Devuelve SKU como string si es válido (6-12 dígitos numéricos), sino None."""
+    if sku_raw is None:
+        return None
+    sku_str = str(sku_raw).strip()
+    if re.match(r"^\d{6,12}$", sku_str):
+        return sku_str
+    return None
+
 _CATEGORIAS_CON_FONDO     = {"Luz": "CFE", "Renta": "Renta"}
 _CATEGORIAS_PEDIR_RESERVA = {"Mantenimiento", "Otro"}
 
@@ -157,6 +206,13 @@ def index():
         ).fetchone()
         fondo_reserva_id = fondo_reserva["id"] if fondo_reserva else None
 
+        catalogo_inventario = [
+            {"id": r["id"], "nombre": r["nombre"]}
+            for r in db.execute(
+                "SELECT id, nombre FROM inventario WHERE activo=1 ORDER BY nombre COLLATE NOCASE"
+            ).fetchall()
+        ]
+
     return render_template(
         "gastos.html",
         hoy=hoy,
@@ -169,6 +225,7 @@ def index():
         fecha_hasta=fecha_hasta,
         cat_filtro=cat_filtro,
         fondo_reserva_id=fondo_reserva_id,
+        catalogo_inventario=catalogo_inventario,
     )
 
 
@@ -249,6 +306,131 @@ def registrar():
     )
 
     resp: dict = {"ok": True, "id": nuevo_id}
+    if fondo_row and saldo_resultado is not None:
+        resp["saldo_fondo"]    = saldo_resultado
+        resp["saldo_negativo"] = saldo_resultado < 0
+        resp["nombre_fondo"]   = fondo_row["nombre"]
+    return jsonify(resp)
+
+
+# ── API: registrar con desglose Sam's ────────────────────────
+
+@gastos_bp.route("/gastos/registrar_con_desglose", methods=["POST"])
+def registrar_con_desglose():
+    data            = request.get_json(silent=True) or {}
+    gasto           = data.get("gasto") or {}
+    productos       = data.get("productos") or []
+
+    fecha           = gasto.get("fecha") or date.today().isoformat()
+    categoria       = (gasto.get("categoria") or "").strip()
+    monto           = float(gasto.get("monto") or 0)
+    descripcion     = (gasto.get("descripcion") or "").strip()
+    recibo_id       = gasto.get("recibo_id")
+    descontar_fondo = bool(gasto.get("descontar_fondo", False))
+
+    if categoria not in CATEGORIAS:
+        return jsonify({"error": "Categoría inválida"}), 400
+    if monto <= 0:
+        return jsonify({"error": "El monto debe ser mayor a cero"}), 400
+
+    movimientos_creados = 0
+
+    with _db() as db:
+        cur = db.execute(
+            """INSERT INTO gastos_extras (fecha, categoria, monto, descripcion, creado_en)
+               VALUES (?, ?, ?, ?, datetime('now','localtime'))""",
+            (fecha, categoria, monto, descripcion),
+        )
+        nuevo_id = cur.lastrowid
+
+        fondo_row      = None
+        saldo_resultado = None
+
+        if categoria in _CATEGORIAS_CON_FONDO:
+            fondo_row = db.execute(
+                "SELECT id, nombre FROM fondos WHERE categoria_enlazada=? AND activo=1 LIMIT 1",
+                (categoria,),
+            ).fetchone()
+        elif categoria in _CATEGORIAS_PEDIR_RESERVA and descontar_fondo:
+            fondo_row = db.execute(
+                "SELECT id, nombre FROM fondos WHERE categoria_enlazada IS NULL AND activo=1 LIMIT 1"
+            ).fetchone()
+
+        if fondo_row:
+            db.execute(
+                "INSERT INTO movimientos_fondos "
+                "(fondo_id, fecha, tipo, monto, concepto, gasto_extra_id) "
+                "VALUES (?, ?, 'retiro', ?, ?, ?)",
+                (fondo_row["id"], fecha, monto, descripcion or categoria, nuevo_id),
+            )
+            db.execute(
+                "UPDATE gastos_extras SET fondo_descontado_id=? WHERE id=?",
+                (fondo_row["id"], nuevo_id),
+            )
+            saldo_resultado = _saldo_fondo(db, fondo_row["id"])
+
+        if recibo_id:
+            recibo = db.execute(
+                "SELECT ruta_imagen FROM recibos WHERE id=?", (recibo_id,)
+            ).fetchone()
+            if recibo:
+                db.execute(
+                    "UPDATE recibos SET gasto_extra_id=?, procesado_por_ia=1 WHERE id=?",
+                    (nuevo_id, recibo_id),
+                )
+                if recibo["ruta_imagen"]:
+                    db.execute(
+                        "UPDATE gastos_extras SET recibo_path=? WHERE id=?",
+                        (recibo["ruta_imagen"], nuevo_id),
+                    )
+
+        for p in productos:
+            inv_id      = p.get("inventario_id")
+            cantidad    = float(p.get("cantidad") or 0)
+            precio_tot  = float(p.get("precio_total") or 0)
+            texto       = str(p.get("texto_ticket") or "")[:80]
+            sku         = _normalizar_sku(p.get("sku_sams"))
+
+            if not inv_id or cantidad <= 0:
+                continue
+
+            existe = db.execute(
+                "SELECT id FROM inventario WHERE id=? AND activo=1", (inv_id,)
+            ).fetchone()
+            if not existe:
+                continue
+
+            db.execute(
+                """INSERT INTO movimientos_inventario
+                   (inventario_id, fecha, tipo, cantidad, precio_total, recibo_id, origen, descripcion)
+                   VALUES (?, ?, 'entrada', ?, ?, ?, 'compra', ?)""",
+                (inv_id, fecha, cantidad, precio_tot, recibo_id, "Compra Sam's — " + texto),
+            )
+            movimientos_creados += 1
+
+            if sku:
+                db.execute(
+                    """INSERT INTO matches_aprendidos
+                           (sku_sams, texto_ticket, inventario_id, veces_confirmado)
+                       VALUES (?, ?, ?, 1)
+                       ON CONFLICT(sku_sams) DO UPDATE SET
+                           inventario_id    = excluded.inventario_id,
+                           texto_ticket     = excluded.texto_ticket,
+                           veces_confirmado = veces_confirmado + 1,
+                           ultima_vez       = datetime('now','localtime')""",
+                    (sku, texto, inv_id),
+                )
+                log_action("matches_aprendidos: upsert sku=%s → inventario_id=%d", sku, inv_id)
+
+        db.commit()
+
+    log_action(
+        "Gasto+desglose registrado: id=%d fecha=%s cat=%s monto=$%.2f movimientos=%d%s",
+        nuevo_id, fecha, categoria, monto, movimientos_creados,
+        f" recibo_id={recibo_id}" if recibo_id else "",
+    )
+
+    resp: dict = {"ok": True, "gasto_id": nuevo_id, "movimientos_creados": movimientos_creados}
     if fondo_row and saldo_resultado is not None:
         resp["saldo_fondo"]    = saldo_resultado
         resp["saldo_negativo"] = saldo_resultado < 0
@@ -397,18 +579,109 @@ def analizar_recibo(recibo_id):
         except ValueError:
             fecha = None
 
+    # --- Segunda llamada: desglose Sam's ---
+    productos = []
+    costo_total = resp["costo_usd"]
+
+    if categoria == "Sam's" and confianza in ("alta", "media"):
+        with _db() as db:
+            cat_rows = db.execute(
+                "SELECT id, nombre FROM inventario WHERE activo=1 ORDER BY nombre COLLATE NOCASE"
+            ).fetchall()
+        lista_catalogo = "\n".join(f"(ID={r['id']}) {r['nombre']}" for r in cat_rows)
+        prompt_sams = PROMPT_RECIBO_SAMS.replace("{lista_catalogo}", lista_catalogo)
+
+        resp2 = call_claude(
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64},
+                    },
+                    {"type": "text", "text": prompt_sams},
+                ],
+            }],
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            modulo_origen="recibos_sams",
+        )
+        costo_total += resp2["costo_usd"]
+
+        if not resp2["error"]:
+            txt2 = (resp2["text"] or "").strip()
+            txt2 = re.sub(r"```(?:json)?\s*", "", txt2).strip().rstrip("`").strip()
+            try:
+                datos2 = json.loads(txt2)
+                lista_prods = [p for p in (datos2.get("productos") or []) if isinstance(p, dict)]
+
+                # Buscar todos los SKUs válidos en matches_aprendidos
+                skus_validos = [s for s in (_normalizar_sku(p.get("sku_sams")) for p in lista_prods) if s]
+                aprendidos = {}
+                if skus_validos:
+                    with _db() as db2:
+                        placeholders = ",".join("?" * len(skus_validos))
+                        rows = db2.execute(
+                            f"SELECT ma.sku_sams, ma.inventario_id, ma.veces_confirmado, i.nombre"
+                            f" FROM matches_aprendidos ma"
+                            f" JOIN inventario i ON i.id = ma.inventario_id"
+                            f" WHERE ma.sku_sams IN ({placeholders})",
+                            skus_validos,
+                        ).fetchall()
+                        aprendidos = {
+                            r["sku_sams"]: {
+                                "inventario_id":   r["inventario_id"],
+                                "nombre":          r["nombre"],
+                                "veces_confirmado": r["veces_confirmado"],
+                            }
+                            for r in rows
+                        }
+
+                for p in lista_prods:
+                    sku = _normalizar_sku(p.get("sku_sams"))
+                    if sku and sku in aprendidos:
+                        aprendido = aprendidos[sku]
+                        mid = aprendido["inventario_id"]
+                        nombre_match = aprendido["nombre"]
+                        confianza = "aprendido"
+                        veces = aprendido["veces_confirmado"]
+                    else:
+                        raw_mid = p.get("match_producto_id")
+                        try:
+                            mid = int(raw_mid) if raw_mid is not None else None
+                        except (TypeError, ValueError):
+                            mid = None
+                        nombre_match = p.get("match_producto_nombre")
+                        confianza = p.get("confianza_match") or "sin_match"
+                        veces = None
+
+                    productos.append({
+                        "sku_sams":            sku,
+                        "texto_ticket":        str(p.get("texto_ticket") or "")[:80],
+                        "cantidad":            max(0.0, float(p.get("cantidad") or 0)),
+                        "precio_unitario":     max(0.0, float(p.get("precio_unitario") or 0)),
+                        "precio_total":        max(0.0, float(p.get("precio_total") or 0)),
+                        "match_producto_id":   mid,
+                        "match_producto_nombre": nombre_match,
+                        "confianza_match":     confianza,
+                        "veces_confirmado":    veces,
+                    })
+            except (json.JSONDecodeError, ValueError, TypeError):
+                productos = []
+
     log_action(
-        "Recibo analizado: id=%d cat=%s monto=%s confianza=%s costo=$%.6f",
-        recibo_id, categoria, monto, confianza, resp["costo_usd"],
+        "Recibo analizado: id=%d cat=%s monto=%s confianza=%s productos=%d costo=$%.6f",
+        recibo_id, categoria, monto, confianza, len(productos), costo_total,
     )
     return jsonify({
-        "ok": True,
-        "concepto": concepto,
-        "monto": monto,
-        "fecha": fecha,
+        "ok":               True,
+        "concepto":         concepto,
+        "monto":            monto,
+        "fecha":            fecha,
         "categoria_sugerida": categoria,
-        "confianza": confianza,
-        "costo_usd": resp["costo_usd"],
+        "confianza":        confianza,
+        "costo_usd":        costo_total,
+        "productos":        productos,
     })
 
 

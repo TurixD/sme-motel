@@ -328,3 +328,19 @@ CREATE INDEX IF NOT EXISTS idx_mov_fondos_fondo          ON movimientos_fondos(f
 CREATE INDEX IF NOT EXISTS idx_conteos_inventario        ON conteos_semanales(inventario_id);
 CREATE INDEX IF NOT EXISTS idx_mov_inventario_inventario ON movimientos_inventario(inventario_id);
 CREATE INDEX IF NOT EXISTS idx_conversaciones_sesion     ON conversaciones_ia(sesion_id);
+
+-- -------------------------------------------------------------
+-- 4.22 matches_aprendidos (Sub-fase 5C)
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matches_aprendidos (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    sku_sams            TEXT    NOT NULL UNIQUE,
+    texto_ticket        TEXT    NOT NULL,
+    inventario_id       INTEGER NOT NULL,
+    veces_confirmado    INTEGER NOT NULL DEFAULT 1,
+    primera_vez         TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    ultima_vez          TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (inventario_id) REFERENCES inventario(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_matches_sku ON matches_aprendidos(sku_sams);

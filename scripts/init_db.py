@@ -150,6 +150,27 @@ def migrar() -> None:
             migraciones += 1
             print("  movimientos_inventario: columna 'origen' agregada")
 
+        # matches_aprendidos (Sub-fase 5C)
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "matches_aprendidos" not in tablas:
+            conn.execute("""
+                CREATE TABLE matches_aprendidos (
+                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sku_sams            TEXT    NOT NULL UNIQUE,
+                    texto_ticket        TEXT    NOT NULL,
+                    inventario_id       INTEGER NOT NULL,
+                    veces_confirmado    INTEGER NOT NULL DEFAULT 1,
+                    primera_vez         TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                    ultima_vez          TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                    FOREIGN KEY (inventario_id) REFERENCES inventario(id)
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_sku ON matches_aprendidos(sku_sams)")
+            migraciones += 1
+            print("  matches_aprendidos: tabla creada")
+
         # reportes_narrativas
         tablas = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"

@@ -387,6 +387,69 @@
     .modal__box { padding: var(--space-6); }
 }
 
+/* === Tabs (Sub-fase 5C) === */
+.inv-tabs {
+    display: flex;
+    gap: var(--space-1);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+}
+
+.inv-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    margin-bottom: -1px;
+    padding: var(--space-2) var(--space-4);
+    transition: color var(--transition-hover), border-color var(--transition-hover);
+    white-space: nowrap;
+}
+
+.inv-tab:hover { color: var(--text-primary); }
+
+.inv-tab--active {
+    border-bottom-color: var(--accent-inventory);
+    color: var(--text-primary);
+}
+
+.inv-tab-badge {
+    display: inline-block;
+    background: rgba(100,130,255,0.18);
+    color: #7b9ef8;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    padding: 0 5px;
+    text-align: center;
+    margin-left: var(--space-1);
+    vertical-align: middle;
+}
+
+/* === Tabla matches aprendidos === */
+.matches-sku {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+}
+
+.matches-texto {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* === Ocultar flechas spin de input number === */
 /* Ocultar flechas spin de input number */
 .conteo-tabla input[type="number"]::-webkit-outer-spin-button,
 .conteo-tabla input[type="number"]::-webkit-inner-spin-button {

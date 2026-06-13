@@ -84,6 +84,42 @@
     </div>
 </div>
 
+<!-- Desglose Sam's: visible solo si la IA extrae productos -->
+<div id="desglose-panel" class="card desglose-card" hidden>
+    <div class="desglose-header">
+        <span class="desglose-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Desglose de productos Sam's
+        </span>
+        <span id="desglose-badge" class="desglose-badge"></span>
+    </div>
+    <div id="desglose-diff" class="desglose-diff" hidden></div>
+    <div class="table-wrap" style="overflow-x:auto">
+        <table class="tabla desglose-table">
+            <thead>
+                <tr>
+                    <th>Texto en ticket</th>
+                    <th class="text-right" style="width:80px">Cant.</th>
+                    <th class="text-right" style="width:110px">P. Unit.</th>
+                    <th class="text-right" style="width:110px">P. Total</th>
+                    <th>Match inventario</th>
+                    <th style="width:36px"></th>
+                </tr>
+            </thead>
+            <tbody id="desglose-tbody"></tbody>
+        </table>
+    </div>
+    <div class="desglose-actions">
+        <button class="btn btn--expense" id="btn-confirmar-desglose" type="button">
+            Confirmar y guardar todo
+        </button>
+        <button class="btn btn--ghost" id="btn-gasto-normal" type="button">
+            Registrar como gasto normal
+        </button>
+    </div>
+    <div id="desglose-estado" class="recibo-estado" hidden></div>
+</div>
+
 <!-- Formulario de registro -->
 <div class="card form-section">
     <h2 class="form-title" style="margin-bottom:var(--space-6)">Registrar gasto</h2>
@@ -281,6 +317,27 @@
     </div>
 </div>
 
+<!-- Modal: crear nuevo producto en inventario (desde desglose Sam's) -->
+<div id="modal-nuevo-producto" class="modal" role="dialog" aria-modal="true" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__box">
+        <h3 class="modal__title">Nuevo producto en inventario</h3>
+        <div class="field-group">
+            <label class="field-label" for="nuevo-prod-nombre">Nombre del producto</label>
+            <input class="field-input" type="text" id="nuevo-prod-nombre" placeholder="Ej. Agua 500ml">
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="nuevo-prod-proveedor">Proveedor</label>
+            <input class="field-input" type="text" id="nuevo-prod-proveedor" value="Sam's">
+        </div>
+        <div id="nuevo-prod-estado" class="recibo-estado" style="margin-top:var(--space-3)" hidden></div>
+        <div class="modal__actions">
+            <button class="btn btn--expense" id="btn-crear-producto" type="button">Crear producto</button>
+            <button class="btn btn--ghost" id="btn-cancelar-nuevo-prod" type="button">Cancelar</button>
+        </div>
+    </div>
+</div>
+
 <!-- Toasts -->
 <div id="toast-container" aria-live="polite"></div>
 
@@ -293,10 +350,11 @@
 <script>
 'use strict';
 
-const CHART_DATA           = {{ chart_data      | tojson }};
-const HISTORIAL            = {{ historial       | tojson }};
-const CATEGORIAS           = {{ categorias      | tojson }};
-const FONDO_RESERVA_ID     = {{ fondo_reserva_id | tojson }};
+const CHART_DATA           = {{ chart_data           | tojson }};
+const HISTORIAL            = {{ historial            | tojson }};
+const CATEGORIAS           = {{ categorias           | tojson }};
+const FONDO_RESERVA_ID     = {{ fondo_reserva_id     | tojson }};
+const CATALOGO_INVENTARIO  = {{ catalogo_inventario  | tojson }};
 const CATS_PEDIR_RESERVA   = ['Mantenimiento', 'Otro'];
 
 /* ─── Colores por categoría (de la paleta del SPEC) ─────── */
