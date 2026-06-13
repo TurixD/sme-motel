@@ -139,6 +139,17 @@ def migrar() -> None:
             migraciones += 1
             print("  cambios_pendientes: tabla creada")
 
+        # movimientos_inventario: descripcion + origen (Fase 5a)
+        cols_mov = {row[1] for row in conn.execute("PRAGMA table_info(movimientos_inventario)").fetchall()}
+        if "descripcion" not in cols_mov:
+            conn.execute("ALTER TABLE movimientos_inventario ADD COLUMN descripcion TEXT")
+            migraciones += 1
+            print("  movimientos_inventario: columna 'descripcion' agregada")
+        if "origen" not in cols_mov:
+            conn.execute("ALTER TABLE movimientos_inventario ADD COLUMN origen TEXT")
+            migraciones += 1
+            print("  movimientos_inventario: columna 'origen' agregada")
+
         # reportes_narrativas
         tablas = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"

@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+
+{% block title %}Conteo semanal — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/inventario.css') }}">
+<style>
+.conteo-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+}
+
+.conteo-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.conteo-tabla th {
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.conteo-tabla td {
+    padding: var(--space-3);
+    border-bottom: 1px solid rgba(42,42,53,0.5);
+    vertical-align: middle;
+}
+
+.conteo-tabla tbody tr:last-child td { border-bottom: none; }
+
+.inp-conteo {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-3);
+    width: 90px;
+    text-align: right;
+    transition: border-color var(--transition-hover);
+}
+
+.inp-conteo:focus {
+    outline: none;
+    border-color: var(--accent-inventory);
+}
+
+.inp-conteo.difiere {
+    border-color: var(--status-warning);
+}
+
+.diff-warn {
+    font-size: var(--text-xs);
+    color: var(--status-warning);
+    margin-left: var(--space-2);
+    white-space: nowrap;
+}
+
+.esperado-num {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.conteo-footer {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-6);
+    margin-top: var(--space-6);
+    flex-wrap: wrap;
+}
+
+.notas-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.notas-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: var(--space-2);
+    display: block;
+}
+
+.notas-input {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    padding: var(--space-3) var(--space-4);
+    width: 100%;
+    resize: none;
+    min-height: 64px;
+    transition: border-color var(--transition-hover);
+}
+
+.notas-input:focus {
+    outline: none;
+    border-color: var(--accent-inventory);
+}
+
+.conteo-resumen {
+    background: rgba(94,232,180,0.08);
+    border: 1px solid rgba(94,232,180,0.2);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-6);
+    font-size: var(--text-sm);
+    color: var(--accent-income);
+    text-align: center;
+    margin-top: var(--space-6);
+}
+
+.conteo-resumen strong {
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="conteo-header">
+    <a href="/inventario" class="btn btn--ghost btn--sm">← Inventario</a>
+    <h1 class="page-title">Conteo semanal</h1>
+    <span class="text-muted text-sm">{{ hoy }}</span>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+    <div class="table-wrap">
+        <table class="conteo-tabla" id="tabla-conteo">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Unidad</th>
+                    <th class="text-right">Esperado</th>
+                    <th class="text-right">Conteo físico</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in productos %}
+                <tr data-id="{{ p.id }}"
+                    data-esperado="{{ p.stock_calculado | round(2) }}">
+                    <td>{{ p.nombre }}</td>
+                    <td class="text-muted">{{ p.unidad or '—' }}</td>
+                    <td class="text-right">
+                        <span class="esperado-num">{{ p.stock_calculado | round(1) }}</span>
+                    </td>
+                    <td class="text-right">
+                        <input
+                            class="inp-conteo"
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value="{{ p.stock_calculado | round(1) }}"
+                            data-id="{{ p.id }}"
+                            oninput="revisarDiff(this)"
+                            aria-label="Conteo de {{ p.nombre }}"
+                        >
+                    </td>
+                    <td id="warn-{{ p.id }}"></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align:center;padding:var(--space-8);color:var(--text-tertiary)">
+                        Sin productos activos
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="conteo-footer">
+    <div class="notas-group">
+        <label class="notas-label" for="inp-notas">Notas del conteo <span style="color:var(--text-tertiary);font-weight:400">(opcional)</span></label>
+        <textarea id="inp-notas" class="notas-input" maxlength="300" placeholder="Observaciones generales..."></textarea>
+    </div>
+    <button class="btn btn--primary" id="btn-guardar-conteo" onclick="guardarConteo()">
+        Guardar conteo ({{ productos | length }} productos)
+    </button>
+</div>
+
+<div id="conteo-resumen" hidden class="conteo-resumen"></div>
+
+<div id="toast-container"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/inventario.js') }}"></script>
+<script>
+const UMBRAL_PCT = 0.20;
+const UMBRAL_ABS = 3;
+
+function revisarDiff(inp) {
+    const row = inp.closest("tr");
+    const esperado = parseFloat(row.dataset.esperado) || 0;
+    const conteo   = parseFloat(inp.value);
+    const warnCell = document.getElementById(`warn-${row.dataset.id}`);
+
+    if (isNaN(conteo)) {
+        inp.classList.remove("difiere");
+        warnCell.innerHTML = "";
+        return;
+    }
+
+    const diff = Math.abs(conteo - esperado);
+    const difiere = esperado > 0
+        ? (diff / esperado >= UMBRAL_PCT || diff >= UMBRAL_ABS)
+        : diff >= UMBRAL_ABS;
+
+    if (difiere) {
+        inp.classList.add("difiere");
+        const signo = conteo > esperado ? "+" : "−";
+        warnCell.innerHTML = `<span class="diff-warn">⚠ ${signo}${diff.toFixed(1)}</span>`;
+    } else {
+        inp.classList.remove("difiere");
+        warnCell.innerHTML = "";
+    }
+}
+
+async function guardarConteo() {
+    const rows = document.querySelectorAll("#tabla-conteo tbody tr[data-id]");
+    if (rows.length === 0) {
+        toast("Sin productos para contar", "warn");
+        return;
+    }
+
+    const items = [];
+    for (const row of rows) {
+        const inp = row.querySelector(".inp-conteo");
+        const cantidad = parseFloat(inp.value);
+        if (isNaN(cantidad) || cantidad < 0) {
+            toast(`Cantidad inválida para ${row.querySelector("td").textContent.trim()}`, "error");
+            inp.focus();
+            return;
+        }
+        items.push({
+            id: parseInt(row.dataset.id),
+            cantidad,
+            esperado: parseFloat(row.dataset.esperado) || 0,
+        });
+    }
+
+    const btn = document.getElementById("btn-guardar-conteo");
+    btn.disabled = true;
+    btn.textContent = "Guardando...";
+
+    try {
+        const r = await fetch("/inventario/conteo", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                items,
+                notas: document.getElementById("inp-notas").value.trim(),
+                fecha: "{{ hoy }}",
+            }),
+        });
+        const data = await r.json();
+        if (!data.ok) {
+            toast(data.error || "Error al guardar", "error");
+            btn.disabled = false;
+            btn.textContent = "Guardar conteo ({{ productos | length }} productos)";
+            return;
+        }
+
+        btn.setAttribute("hidden", "");
+        const resumen = document.getElementById("conteo-resumen");
+        resumen.removeAttribute("hidden");
+        const difMsg = data.diferencias > 0
+            ? `, <strong>${data.diferencias}</strong> diferencia${data.diferencias !== 1 ? "s" : ""} detectada${data.diferencias !== 1 ? "s" : ""}`
+            : ", sin diferencias";
+        resumen.innerHTML = `<strong>${data.contados}</strong> productos contados${difMsg}. <a href="/inventario" style="color:var(--accent-income);text-decoration:underline">← Volver al inventario</a>`;
+    } catch {
+        toast("Error de conexión", "error");
+        btn.disabled = false;
+        btn.textContent = "Guardar conteo ({{ productos | length }} productos)";
+    }
+}
+
+// Revisar diffs al cargar (por si hay valores pre-llenados distintos)
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".inp-conteo").forEach(revisarDiff);
+});
+</script>
+{% endblock %}
