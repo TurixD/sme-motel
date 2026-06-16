@@ -286,6 +286,63 @@ def _dash_data(db_path: str) -> dict:
     }
 
 
+def _gerty_context() -> dict:
+    """Computa el estado de GERTY para inyectarlo en todos los templates."""
+    hora = datetime.now().hour
+    try:
+        with sqlite3.connect(Config.DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+
+            fondos_rows = conn.execute(
+                """SELECT LOWER(f.nombre) AS nombre,
+                          COALESCE(SUM(CASE WHEN m.tipo='deposito' THEN m.monto ELSE 0 END), 0) -
+                          COALESCE(SUM(CASE WHEN m.tipo='retiro'   THEN m.monto ELSE 0 END), 0) AS saldo
+                   FROM fondos f
+                   LEFT JOIN movimientos_fondos m ON m.fondo_id = f.id
+                   WHERE f.activo = 1
+                     AND (LOWER(f.nombre) LIKE '%reserva%' OR LOWER(f.nombre) LIKE '%renta%')
+                   GROUP BY f.id"""
+            ).fetchall()
+
+            reserva_baja = any(
+                float(r["saldo"]) < 5000 for r in fondos_rows if "reserva" in r["nombre"]
+            )
+            renta_baja = any(
+                float(r["saldo"]) < 5000 for r in fondos_rows if "renta" in r["nombre"]
+            )
+
+            hoy_str = date.today().isoformat()
+            hay_turno = conn.execute(
+                """SELECT 1 FROM asignaciones_turnos at
+                   JOIN empleados e ON e.id = at.empleado_id
+                   WHERE at.fecha = ? AND LOWER(e.nombre) LIKE '%turi%'
+                   LIMIT 1""",
+                (hoy_str,),
+            ).fetchone() is not None
+
+    except Exception:
+        reserva_baja = renta_baja = hay_turno = False
+
+    if hora >= 23 or hora <= 6:
+        estado = "dormido"
+    elif reserva_baja or renta_baja:
+        estado = "alerta"
+    elif hay_turno:
+        estado = "turno_turi"
+    else:
+        estado = "default"
+
+    return {
+        "estado": estado,
+        "contexto": {
+            "hora_servidor": hora,
+            "hay_turno_turi": hay_turno,
+            "fondo_reserva_bajo": reserva_baja,
+            "fondo_renta_bajo": renta_baja,
+        },
+    }
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -318,6 +375,7 @@ def create_app() -> Flask:
         return {
             "fecha_actual": _fecha_es(datetime.now()),
             "clima": "24 °C, soleado — Aguascalientes",
+            "gerty_state": _gerty_context(),
         }
 
     @app.route("/")
@@ -325,6 +383,10 @@ def create_app() -> Flask:
         data = _dash_data(Config.DB_PATH)
         log_action("Visita al dashboard (/)")
         return render_template("dashboard.html", **data)
+
+    @app.route("/api/gerty/estado")
+    def gerty_estado():
+        return jsonify(_gerty_context())
 
     @app.route("/dashboard/api/marcar-pagada", methods=["POST"])
     def marcar_pagada():

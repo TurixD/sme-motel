@@ -58,6 +58,8 @@ function handleEnviar() {
     appendMessage('user', msg);
     showLoading(true);
 
+    if (window.Gerty) window.Gerty.setProcessing(true);
+
     fetch('/asistente/api/mensaje', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,6 +67,7 @@ function handleEnviar() {
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
+        if (window.Gerty) window.Gerty.setProcessing(false);
         showLoading(false);
         if (data.ok) {
             appendMessage('assistant', data.respuesta);
@@ -81,6 +84,7 @@ function handleEnviar() {
         scrollToBottom();
     })
     .catch(function () {
+        if (window.Gerty) window.Gerty.setProcessing(false);
         showLoading(false);
         appendMessage('assistant', 'Error de conexión. Verifica que el servidor esté activo.');
         scrollToBottom();

@@ -23,19 +23,19 @@
     </div>
     {% endif %}
 
-    {# ── 3 tarjetas del día ─────────────────────────────────── #}
-    <section class="cards-grid">
-        <div class="card card--accent-income">
+    {# ── 3 columnas del día (bloque unificado) ─────────────── #}
+    <section class="dia-bloque">
+        <div class="dia-bloque__col dia-bloque__col--income">
             <div class="card__label"><span class="card__accent-dot"></span> Ingresos del día</div>
             <div class="card__value">{{ ing_dia | moneda }}</div>
             {% if ing_dia == 0 %}<p class="empty-note">Sin registros hoy</p>{% endif %}
         </div>
-        <div class="card card--accent-expense">
+        <div class="dia-bloque__col dia-bloque__col--expense">
             <div class="card__label"><span class="card__accent-dot"></span> Gastos del día</div>
             <div class="card__value">{{ gas_dia | moneda }}</div>
             {% if gas_dia == 0 %}<p class="empty-note">Sin registros hoy</p>{% endif %}
         </div>
-        <div class="card card--accent-net">
+        <div class="dia-bloque__col dia-bloque__col--net">
             <div class="card__label"><span class="card__accent-dot"></span> Ganancia neta</div>
             <div class="card__value {{ 'val--neg' if gan_dia < 0 }}">{{ gan_dia | moneda }}</div>
         </div>
@@ -191,6 +191,7 @@ document.addEventListener('click', function (e) {
     .then(function (r) { return r.json(); })
     .then(function (data) {
         if (data.ok) {
+            if (window.Gerty) window.Gerty.happyReaction();
             var card = document.getElementById('reminder-' + id);
             if (card) card.remove();
             var list = document.getElementById('reminders-list');

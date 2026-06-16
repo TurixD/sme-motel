@@ -1,0 +1,152 @@
+{# _gerty.html — SVG inline de GERTY, la mascota del sistema (Fase 6)
+   Se incluye via {% include "_gerty.html" %} en base.html (widget flotante)
+   y en asistente.html (avatar en el header). #}
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 150 220"
+     class="gerty-svg"
+     data-state="{{ (gerty_state or {}).estado or 'default' }}"
+     role="img" aria-label="GERTY">
+
+  <defs>
+    <pattern id="gerty-scanlines" x="22" y="13" width="106" height="4"
+             patternUnits="userSpaceOnUse">
+      <rect width="106" height="1" fill="rgba(0,0,0,0.05)"/>
+    </pattern>
+  </defs>
+
+  {# ── Cuerpo CRT ── #}
+  <rect id="gerty-body" x="12" y="4" width="126" height="164"
+        rx="14" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+
+  {# ── Pantalla interior ── #}
+  <rect x="22" y="13" width="106" height="115" rx="6"
+        fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+  <rect x="22" y="13" width="106" height="115" rx="6"
+        fill="url(#gerty-scanlines)" pointer-events="none"/>
+
+  {# ── Cara amarilla ── #}
+  <circle cx="75" cy="70" r="42"
+          fill="#FFD93D" stroke="#000000" stroke-width="2.5"/>
+
+  {# ── Etiqueta de contexto (nombre de la ruta, 1.5s al cargar) ── #}
+  <text id="gerty-ctx-label" x="75" y="26" text-anchor="middle"
+        font-size="10" font-family="JetBrains Mono, monospace"
+        fill="#000000" class="gerty-ctx-label"></text>
+
+  {# ── Ojos — un grupo por estado (CSS muestra el correcto) ── #}
+  <g id="gerty-eyes-default" display="none">
+    <circle cx="60" cy="64" r="4.5" fill="#000000"/>
+    <circle cx="90" cy="64" r="4.5" fill="#000000"/>
+  </g>
+
+  <g id="gerty-eyes-alerta" display="none">
+    <rect x="54" y="61" width="13" height="4" rx="2" fill="#000000"/>
+    <rect x="83" y="61" width="13" height="4" rx="2" fill="#000000"/>
+  </g>
+
+  <g id="gerty-eyes-dormido" display="none">
+    <path d="M 53 65 Q 60 59 67 65" fill="none" stroke="#000000"
+          stroke-width="3" stroke-linecap="round"/>
+    <path d="M 83 65 Q 90 59 97 65" fill="none" stroke="#000000"
+          stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g id="gerty-eyes-procesando" display="none">
+    <circle cx="60" cy="64" r="7" fill="none" stroke="#000000" stroke-width="1.5"/>
+    <circle cx="60" cy="64" r="3.5" fill="#000000"/>
+    <circle cx="90" cy="64" r="7" fill="none" stroke="#000000" stroke-width="1.5"/>
+    <circle cx="90" cy="64" r="3.5" fill="#000000"/>
+  </g>
+
+  <g id="gerty-eyes-happy" display="none">
+    <path d="M 53 68 Q 60 58 67 68" fill="none" stroke="#000000"
+          stroke-width="3" stroke-linecap="round"/>
+    <path d="M 83 68 Q 90 58 97 68" fill="none" stroke="#000000"
+          stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g id="gerty-eyes-turno_turi" display="none">
+    <circle cx="60" cy="64" r="4.5" fill="#000000"/>
+    <circle cx="90" cy="64" r="4.5" fill="#000000"/>
+    <ellipse cx="56" cy="78" rx="3" ry="5" fill="#3B82F6" opacity="0.85"/>
+    <ellipse cx="86" cy="78" rx="3" ry="5" fill="#3B82F6" opacity="0.85"/>
+  </g>
+
+  {# Ojos de parpadeo (momentáneo 150ms, manejado por JS) #}
+  <g id="gerty-blink-eyes" display="none">
+    <rect x="54" y="63" width="13" height="3" rx="1.5" fill="#000000"/>
+    <rect x="83" y="63" width="13" height="3" rx="1.5" fill="#000000"/>
+  </g>
+
+  {# ── Boca — un grupo por estado ── #}
+  <g id="gerty-mouth-default" display="none">
+    <path d="M 58 83 Q 75 99 92 83"
+          fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <g id="gerty-mouth-alerta" display="none">
+    <path d="M 60 90 Q 75 82 90 90"
+          fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round"/>
+    <ellipse cx="88" cy="81" rx="3" ry="5" fill="#3B82F6" opacity="0.85"/>
+  </g>
+
+  <g id="gerty-mouth-dormido" display="none">
+    <path d="M 62 90 Q 75 84 88 90"
+          fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round"
+          stroke-dasharray="4 3"/>
+  </g>
+
+  <g id="gerty-mouth-turno_turi" display="none">
+    <path d="M 58 93 Q 75 80 92 93"
+          fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <g id="gerty-mouth-happy" display="none">
+    <path d="M 53 80 Q 75 105 97 80"
+          fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <g id="gerty-mouth-procesando" display="none">
+    <path d="M 58 83 Q 75 99 92 83"
+          fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  {# ── LED indicador (abajo-derecha del cuerpo CRT) ── #}
+  <circle id="gerty-led" cx="118" cy="153" r="5"/>
+
+  {# ── Texto SME ── #}
+  <text x="118" y="165" text-anchor="middle"
+        font-size="11" font-family="JetBrains Mono, monospace"
+        fill="#000000">SME</text>
+
+  {# ── Base: plataforma (rect negro + rect blanco interior) ── #}
+  <rect x="38" y="168" width="74" height="18" rx="5" fill="#000000"/>
+  <rect x="44" y="172" width="62" height="10" rx="3" fill="#ffffff"/>
+
+  {# ── Patitas ── #}
+  <rect x="43" y="186" width="16" height="22" rx="3" fill="#000000"/>
+  <rect x="91" y="186" width="16" height="22" rx="3" fill="#000000"/>
+
+  {# ── Barra del piso ── #}
+  <rect x="33" y="205" width="84" height="10" rx="4" fill="#000000"/>
+
+  {# ── zZ dormido (CSS lo muestra cuando data-state="dormido") ── #}
+  <g id="gerty-zzz" display="none">
+    <text x="130" y="56" font-size="14"
+          font-family="JetBrains Mono, monospace"
+          fill="#000000" class="gerty-z1">z</text>
+    <text x="138" y="40" font-size="18"
+          font-family="JetBrains Mono, monospace"
+          fill="#000000" class="gerty-z2">Z</text>
+  </g>
+
+  {# ── Easter egg: estrella + corazón (doble click) ── #}
+  <g id="gerty-easter" display="none">
+    <text x="75" y="43" text-anchor="middle" font-size="14"
+          fill="#FFD93D" stroke="#000000" stroke-width="0.5"
+          class="gerty-star">&#9733;</text>
+    <text x="134" y="80" font-size="13" fill="#FF7A8A"
+          class="gerty-heart">&#9829;</text>
+  </g>
+
+</svg>

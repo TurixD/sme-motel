@@ -13,6 +13,7 @@
     <!-- CSS de SME -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/gerty.css') }}">
     {% block styles %}{% endblock %}
 </head>
 <body>
@@ -29,6 +30,12 @@
             {% block content %}{% endblock %}
         </main>
     </div>
+
+    {% if not request.path.startswith('/asistente') %}
+    <div class="gerty-widget" id="gerty-widget">
+        {% include "_gerty.html" %}
+    </div>
+    {% endif %}
 
     <!-- Menu flotante inferior (SPEC 5.1). Iconos SVG inline (estilo Linear). -->
     <nav class="bottom-nav" aria-label="Navegacion principal">
@@ -63,5 +70,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" defer></script>
     {% block scripts %}{% endblock %}
+
+    <script>window.GERTY_STATE = {{ gerty_state | tojson }};</script>
+    <script src="{{ url_for('static', filename='js/gerty.js') }}" defer></script>
 </body>
 </html>

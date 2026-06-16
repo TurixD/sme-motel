@@ -18,6 +18,12 @@
     flex-shrink: 0;
 }
 
+/* GERTY avatar en el header del asistente (gerty.css define .gerty-avatar tamaño) */
+.asistente__header .gerty-avatar {
+    cursor: default;
+    flex-shrink: 0;
+}
+
 .asistente__titulo {
     font-size: var(--text-lg);
     font-weight: 600;
