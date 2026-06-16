@@ -67,7 +67,7 @@ function handleEnviar() {
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-        if (window.Gerty) window.Gerty.setProcessing(false);
+        if (window.Gerty) setTimeout(function () { window.Gerty.setProcessing(false); }, 500);
         showLoading(false);
         if (data.ok) {
             appendMessage('assistant', data.respuesta);
@@ -84,7 +84,7 @@ function handleEnviar() {
         scrollToBottom();
     })
     .catch(function () {
-        if (window.Gerty) window.Gerty.setProcessing(false);
+        if (window.Gerty) setTimeout(function () { window.Gerty.setProcessing(false); }, 500);
         showLoading(false);
         appendMessage('assistant', 'Error de conexión. Verifica que el servidor esté activo.');
         scrollToBottom();

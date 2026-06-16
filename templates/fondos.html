@@ -414,11 +414,10 @@ var APORTES_DATA = {{ aportes_pendientes | tojson }};
             btn.disabled = false;
             if (!data.ok) { showToast(data.error || 'Error al guardar', 'error'); return; }
             closeModal();
-            updateSaldo(modalState.fondoId, data.saldo, data.saldo_display, data.saldo_negativo);
-            refreshMovsBtn(modalState.fondoId, '?');
             var msg = modalState.tipo === 'depositar' ? 'Depósito registrado' : 'Retiro registrado';
             showToast(msg + (data.saldo_negativo ? ' — saldo negativo' : ''),
                       data.saldo_negativo ? 'warn' : 'success');
+            setTimeout(function () { location.reload(); }, 800);
         })
         .catch(function () { btn.disabled = false; showToast('Error de red', 'error'); });
     });
@@ -455,10 +454,8 @@ var APORTES_DATA = {{ aportes_pendientes | tojson }};
                 .then(function (data) {
                     btnConf.disabled = false;
                     if (!data.ok) { showToast(data.error || 'Error', 'error'); return; }
-                    updateSaldo(ap.id, data.saldo, data.saldo_display, data.saldo_negativo);
-                    refreshMovsBtn(ap.id, '?');
-                    removeAporteCard(ap.id);
                     showToast('Aporte confirmado', 'success');
+                    setTimeout(function () { location.reload(); }, 800);
                 })
                 .catch(function () { btnConf.disabled = false; showToast('Error de red', 'error'); });
             });

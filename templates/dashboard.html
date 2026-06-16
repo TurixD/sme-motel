@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 {% endblock %}
 
+{% from "_wx_icon.html" import wx_icon %}
 {% block content %}
 <div class="dashboard">
 
@@ -137,18 +138,80 @@
             <p class="empty-note">Sin fondo activo llamado "Reserva"</p>
             {% endif %}
         </div>
-        <div class="card">
-            <div class="widget-split">
-                <div class="widget-split__lado">
-                    <div class="card__label">Clima</div>
-                    <div class="card__value" style="font-size: var(--text-base); font-family: var(--font-sans);">{{ clima }}</div>
+        <div class="card mw-card">
+
+            {# ── Widget Clima ── #}
+            <div class="mini-widget mini-widget--clima">
+                <div class="mw-top">
+                    <div class="mw-icon">
+                        {{ wx_icon(clima_data.categoria, 32, True) }}
+                    </div>
+                    <div class="mw-datos">
+                        <span class="mw-num">{% if clima_data.temp is not none %}{{ clima_data.temp }}°{% else %}—{% endif %}</span>
+                        <span class="mw-label">{{ clima_data.desc | capitalize if clima_data.desc else 'Aguascalientes' }}</span>
+                        <span class="mw-sub">Aguascalientes</span>
+                    </div>
                 </div>
-                <div class="widget-split__separador"></div>
-                <a href="/configuracion#ia" class="widget-split__lado widget-split__lado--ia">
-                    <div class="card__label">Uso IA del mes</div>
-                    <div class="widget-split__costo">${{ "%.4f" % costo_ia_mes }}</div>
-                </a>
+                <div class="mw-expand">
+                    {% if clima_data.forecast %}
+                    <div class="wx-forecast">
+                        {% for h in clima_data.forecast %}
+                        <div class="wx-fc-col">
+                            <span class="wx-fc-hora">{{ h.hora }}</span>
+                            {{ wx_icon(h.categoria, 14, False) }}
+                            <span class="wx-fc-temp">{{ h.temp }}°</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="empty-note" style="font-size:var(--text-xs);margin:0">Sin pronóstico</p>
+                    {% endif %}
+                </div>
             </div>
+
+            <div class="mw-sep"></div>
+
+            {# ── Widget IA ── #}
+            <a href="/configuracion#ia" class="mini-widget mini-widget--ia">
+                <div class="mw-top">
+                    <div class="mw-icon">
+                        <svg class="wx-ico wx-chip-pulse" viewBox="0 0 32 32" width="32" height="32" fill="none" aria-hidden="true">
+                            <rect x="9" y="9" width="14" height="14" rx="2" stroke="var(--accent-ai)" stroke-width="1.5" fill="none"/>
+                            <rect x="12" y="12" width="8" height="8" rx="1" fill="var(--accent-ai)" opacity="0.5"/>
+                            <line x1="12" y1="5" x2="12" y2="9"  stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="16" y1="4" x2="16" y2="9"  stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="20" y1="5" x2="20" y2="9"  stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="12" y1="23" x2="12" y2="27" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="16" y1="23" x2="16" y2="28" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="20" y1="23" x2="20" y2="27" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="5"  y1="12" x2="9"  y2="12" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="4"  y1="16" x2="9"  y2="16" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="5"  y1="20" x2="9"  y2="20" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="23" y1="12" x2="27" y2="12" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="23" y1="16" x2="28" y2="16" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                            <line x1="23" y1="20" x2="27" y2="20" stroke="var(--accent-ai)" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="mw-datos">
+                        <span class="mw-num mw-num--ia">${{ "%.2f" % costo_ia_mes }}</span>
+                        <span class="mw-label">USD este mes</span>
+                        <span class="mw-sub">{{ llamadas_ia_mes }} llamadas</span>
+                    </div>
+                </div>
+                <div class="mw-expand">
+                    {% set ia_pct = [((costo_ia_mes / 5) * 100) | int, 100] | min %}
+                    <div class="ia-barra-label">Límite mensual $5 USD</div>
+                    <div class="ia-barra-track">
+                        <div class="ia-barra-fill
+                            {% if ia_pct > 90 %}ia-barra-fill--rojo
+                            {% elif ia_pct > 70 %}ia-barra-fill--amarillo
+                            {% else %}ia-barra-fill--verde{% endif %}"
+                             style="width:{{ ia_pct }}%"></div>
+                    </div>
+                    <div class="ia-barra-pct">{{ ia_pct }}% usado</div>
+                </div>
+            </a>
+
         </div>
     </section>
 

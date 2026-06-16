@@ -22,7 +22,11 @@
             <div class="app-header__brand">S<span>M</span>E</div>
             <div class="app-header__meta">
                 <span class="app-header__date">{{ fecha_actual }}</span>
-                <span class="app-header__weather">{{ clima }}</span>
+                <span class="app-header__weather">
+                    {%- from "_wx_icon.html" import wx_icon -%}
+                    {{ wx_icon(clima_data.categoria, 18, True) }}
+                    {{ clima }}
+                </span>
             </div>
         </header>
 

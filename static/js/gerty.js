@@ -33,24 +33,12 @@
         manageBlink();
     }
 
-    /* ── Polling: calcula el estado real ── */
-    function computeState(data) {
-        if (isHappy)      return 'happy';
-        if (isProcessing) return 'procesando';
-        var h = data.contexto.hora_servidor;
-        if (h >= 23 || h <= 6) return 'dormido';
-        if (data.contexto.fondo_reserva_bajo || data.contexto.fondo_renta_bajo) return 'alerta';
-        if (data.contexto.hay_turno_turi) return 'turno_turi';
-        return 'default';
-    }
-
     function poll() {
         fetch('/api/gerty/estado')
             .then(function (r) { return r.json(); })
             .then(function (data) {
-                if (!isHappy && !isProcessing) {
-                    setState(computeState(data));
-                }
+                if (isHappy || isProcessing) return;
+                setState(data.estado);
             })
             .catch(function () { /* red inestable: se queda en estado actual */ });
     }

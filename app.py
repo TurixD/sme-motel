@@ -3,7 +3,11 @@ app.py - Entry point de SME (Software de Manejo de Estres).
 """
 
 import calendar
+import json
 import sqlite3
+import time
+import urllib.error
+import urllib.request
 from datetime import date, datetime, timedelta
 
 from flask import Flask, jsonify, render_template, request
@@ -260,10 +264,14 @@ def _dash_data(db_path: str) -> dict:
             })
         recordatorios.sort(key=lambda x: x["proxima_fecha"])
 
-        # --- Costo IA del mes ---
+        # --- Costo e interacciones IA del mes ---
         mes_inicio = f"{hoy.year}-{hoy.month:02d}-01"
         costo_ia_mes = float(conn.execute(
             "SELECT COALESCE(SUM(costo_usd), 0) FROM uso_ia WHERE fecha >= ?",
+            (mes_inicio,),
+        ).fetchone()[0])
+        llamadas_ia_mes = int(conn.execute(
+            "SELECT COUNT(*) FROM uso_ia WHERE fecha >= ?",
             (mes_inicio,),
         ).fetchone()[0])
 
@@ -283,7 +291,97 @@ def _dash_data(db_path: str) -> dict:
         "turnos_rows":      turnos_rows,
         "recordatorios":    recordatorios,
         "costo_ia_mes":     costo_ia_mes,
+        "llamadas_ia_mes":  llamadas_ia_mes,
     }
+
+
+_CLIMA_CACHE: dict = {"data": None, "ts": 0.0}
+
+_WMO = {
+    0: "despejado",
+    1: "mayormente despejado", 2: "parcialmente nublado", 3: "nublado",
+    45: "neblina", 48: "neblina",
+    51: "llovizna", 53: "llovizna", 55: "llovizna",
+    61: "lluvia leve", 63: "lluvia", 65: "lluvia intensa",
+    71: "nieve leve", 73: "nieve", 75: "nieve intensa", 77: "granizo",
+    80: "chubascos", 81: "chubascos", 82: "chubascos fuertes",
+    95: "tormenta", 96: "tormenta", 99: "tormenta intensa",
+}
+
+_CLIMA_FALLBACK: dict = {
+    "valor": "Aguascalientes", "temp": None, "code": None,
+    "desc": "", "categoria": "nublado", "forecast": [],
+}
+
+
+def _wmo_categoria(code: int) -> str:
+    if code == 0:        return "despejado"
+    if 1  <= code <= 3:  return "nublado"
+    if 45 <= code <= 48: return "neblina"
+    if 51 <= code <= 67: return "lluvia"
+    if 71 <= code <= 77: return "nieve"
+    if 80 <= code <= 82: return "chubascos"
+    if 95 <= code <= 99: return "tormenta"
+    return "nublado"
+
+
+def _obtener_clima() -> dict:
+    """Consulta Open-Meteo con forecast horario. Cachea 15 min. Falla silencioso."""
+    global _CLIMA_CACHE
+    ahora = time.time()
+    if ahora - _CLIMA_CACHE["ts"] < 900 and _CLIMA_CACHE["data"]:
+        return _CLIMA_CACHE["data"]
+
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        "?latitude=21.88&longitude=-102.29"
+        "&current=temperature_2m,weather_code"
+        "&hourly=temperature_2m,weather_code"
+        "&forecast_days=2"
+        "&timezone=America/Mexico_City"
+    )
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "SME-Motel/1.0"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+
+        temp = round(data["current"]["temperature_2m"])
+        code = int(data["current"]["weather_code"])
+        desc = _WMO.get(code, "variable")
+        cat  = _wmo_categoria(code)
+
+        # Próximas 6 horas desde la hora actual
+        cur_hora  = int(data["current"]["time"][11:13])
+        h_times   = data["hourly"]["time"]
+        h_temps   = data["hourly"]["temperature_2m"]
+        h_codes   = data["hourly"]["weather_code"]
+        forecast  = []
+        for i in range(1, 7):
+            idx = cur_hora + i
+            if idx < len(h_times):
+                hc = int(h_codes[idx])
+                forecast.append({
+                    "hora":      h_times[idx][11:16],
+                    "temp":      round(h_temps[idx]),
+                    "code":      hc,
+                    "desc":      _WMO.get(hc, "variable"),
+                    "categoria": _wmo_categoria(hc),
+                })
+
+        resultado = {
+            "valor":     f"{temp}°C, {desc} — Aguascalientes",
+            "temp":      temp,
+            "code":      code,
+            "desc":      desc,
+            "categoria": cat,
+            "forecast":  forecast,
+        }
+        _CLIMA_CACHE = {"data": resultado, "ts": ahora}
+        return resultado
+
+    except Exception:
+        _CLIMA_CACHE["ts"] = ahora - 840  # reintenta en ~60s
+        return _CLIMA_CACHE.get("data") or _CLIMA_FALLBACK
 
 
 def _gerty_context() -> dict:
@@ -323,7 +421,7 @@ def _gerty_context() -> dict:
     except Exception:
         reserva_baja = renta_baja = hay_turno = False
 
-    if hora >= 23 or hora <= 6:
+    if 1 <= hora <= 6:
         estado = "dormido"
     elif reserva_baja or renta_baja:
         estado = "alerta"
@@ -372,10 +470,12 @@ def create_app() -> Flask:
     # --- Variables globales de template ---
     @app.context_processor
     def inject_globals():
+        clima_obj = _obtener_clima()
         return {
             "fecha_actual": _fecha_es(datetime.now()),
-            "clima": "24 °C, soleado — Aguascalientes",
-            "gerty_state": _gerty_context(),
+            "clima":        clima_obj["valor"],
+            "clima_data":   clima_obj,
+            "gerty_state":  _gerty_context(),
         }
 
     @app.route("/")
