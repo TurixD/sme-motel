@@ -1,4 +1,4 @@
-# SME — Software de Manejo de Estrés
+# SME — Software de Manejo Empresarial
 
 Sistema de administración integral para un motel, de uso personal y local. Centraliza
 ingresos, gastos, fondos de reserva, empleados/turnos, inventario y reportes, con
