@@ -10,15 +10,16 @@ La especificación técnica completa vive en [`SPEC.md`](SPEC.md).
 
 ## Stack
 
-| Componente        | Tecnología                          |
-|-------------------|-------------------------------------|
-| Lenguaje          | Python 3.14                         |
-| Framework web     | Flask                               |
-| Servidor WSGI     | waitress (producción en Windows)    |
-| Base de datos     | SQLite (`sqlite3` nativo, SQL directo) |
-| Frontend          | HTML + CSS + JavaScript vanilla     |
-| IA                | API de Anthropic (Claude)           |
-| Variables         | `.env` con python-dotenv            |
+| Componente        | Tecnología                              |
+|-------------------|-----------------------------------------|
+| Lenguaje          | Python 3.14                             |
+| Framework web     | Flask                                   |
+| Servidor WSGI     | waitress (producción en Windows)        |
+| Base de datos     | SQLite (`sqlite3` nativo, SQL directo)  |
+| Frontend          | HTML + CSS + JavaScript vanilla         |
+| IA                | API de Anthropic (Claude)               |
+| Variables         | `.env` con python-dotenv                |
+| Clima             | Open-Meteo API (gratis, sin API key)    |
 
 ---
 
@@ -45,13 +46,15 @@ copy .env.example .env        # luego rellenar los valores en .env
 
 ## Uso
 
-> _(Pendiente — se completará conforme avancen las fases de desarrollo.)_
-
 ```bash
+# Arrancar el servidor (modo desarrollo)
 python app.py
+
+# O con waitress (producción)
+python -m waitress --port=5050 app:app
 ```
 
-Abre el navegador en `http://localhost:5050`.
+Abre el navegador en `http://localhost:5050`. El script de autoarranque en `scripts/startup.bat` levanta el servidor automáticamente al iniciar Windows.
 
 ---
 
@@ -80,14 +83,14 @@ sme-motel/
 
 El proyecto se desarrolla en **7 fases incrementales** (ver [`SPEC.md` §7](SPEC.md#7-plan-de-desarrollo-por-fases)).
 
-- [x] **Fase 0 — Cimientos**
+- [x] **Fase 0 — Cimientos** ✅
 - [x] **Fase 1 — Operación básica** ✅
 - [x] **Fase 2 — Fondos y reportes** ✅
-- [ ] **Fase 3 — IA básica** _(siguiente)_
-- [ ] Fase 4 — Asistente conversacional
-- [ ] Fase 5 — Inventario inteligente
-- [ ] Fase 6 — Pulido y mascota (GERTY-MOTEL)
-- [ ] Fase 7 — Iteración continua
+- [x] **Fase 3 — IA básica** ✅ _(recibos por foto, narrativas en reportes, contador de tokens)_
+- [x] **Fase 4 — Asistente conversacional** ✅ _(chat con tool use, cambios con confirmación)_
+- [x] **Fase 5 — Inventario inteligente** ✅ _(conteo guiado, matches aprendidos por SKU)_
+- [x] **Fase 6 — Pulido y mascota** ✅ _(GERTY-MOTEL, widgets clima/IA animados)_
+- [ ] **Fase 7 — Iteración continua** _(en curso)_
 
 ---
 
