@@ -4,9 +4,6 @@ Sistema de administración integral para un motel, de uso personal y local. Cent
 ingresos, gastos, fondos de reserva, empleados/turnos, inventario y reportes, con
 integración de IA (Claude) para lectura de recibos, asistente conversacional y reportes.
 
-> El sistema existe para **reducir el estrés operativo**, no para demostrar capacidad
-> técnica. Ante la duda, se elige siempre la opción más simple.
-
 La especificación técnica completa vive en [`SPEC.md`](SPEC.md).
 
 ---
