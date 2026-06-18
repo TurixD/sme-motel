@@ -8,9 +8,11 @@
     var currentState        = svg.dataset.state || 'default';
     var isHappy             = false;
     var isProcessing        = false;
+    var easterActive        = false;
     var blinkTimer          = null;
     var pollTimer           = null;
     var happyTimer          = null;
+    var easterTimer         = null;
     var processingStartTime = 0;
     var processingTimer     = null;
 
@@ -37,7 +39,7 @@
         fetch('/api/gerty/estado')
             .then(function (r) { return r.json(); })
             .then(function (data) {
-                if (isHappy || isProcessing) return;
+                if (isHappy || isProcessing || easterActive) return;
                 setState(data.estado);
             })
             .catch(function () { /* red inestable: se queda en estado actual */ });
@@ -46,7 +48,8 @@
     /* ── Parpadeo aleatorio (8-15 s) ── */
     function manageBlink() {
         if (blinkTimer) { clearTimeout(blinkTimer); blinkTimer = null; }
-        if (currentState === 'dormido' || currentState === 'procesando') return;
+        if (currentState === 'dormido' || currentState === 'procesando' ||
+            currentState === 'enojado' || currentState === 'chiveado') return;
         scheduleBlink();
     }
 
@@ -114,28 +117,44 @@
         }
     }
 
-    /* ── Easter egg (doble click) ── */
-    function easterEgg() {
-        svg.classList.add('is-easter');
-        var wrap = svg.closest('.gerty-widget') || svg.closest('.gerty-avatar');
-        if (wrap) wrap.classList.add('gerty-wiggle');
-        setTimeout(function () {
-            svg.classList.remove('is-easter');
-            if (wrap) wrap.classList.remove('gerty-wiggle');
-            setState(currentState);
+    /* ── Easter egg: enojado → chiveado (solo desde dormido) ── */
+    function activarEnojado() {
+        easterActive = true;
+        setState('enojado');
+        var wrap = svg.closest('.gerty-widget') || svg.closest('.gerty-avatar') || svg;
+        wrap.classList.add('gerty-enojado-anim');
+        setTimeout(function () { wrap.classList.remove('gerty-enojado-anim'); }, 250);
+        if (easterTimer) clearTimeout(easterTimer);
+        easterTimer = setTimeout(function () {
+            easterActive = false;
+            setState('dormido');
+        }, 3000);
+    }
+
+    function activarChiveado() {
+        clearTimeout(easterTimer);
+        setState('chiveado');
+        easterTimer = setTimeout(function () {
+            easterActive = false;
+            setState('dormido');
         }, 2000);
     }
 
-    /* ── Click: redirigir a /asistente (simple), easter egg (doble) ── */
+    /* ── Click: redirigir a /asistente (simple), easter egg desde dormido (doble) ── */
     var singleTimer = null;
     svg.addEventListener('dblclick', function (e) {
         e.preventDefault();
         clearTimeout(singleTimer);
-        easterEgg();
+        if (currentState === 'dormido') activarEnojado();
+        // cualquier otro estado: no hace nada
     });
     svg.addEventListener('click', function () {
         clearTimeout(singleTimer);
         singleTimer = setTimeout(function () {
+            if (easterActive) {
+                if (currentState === 'enojado') activarChiveado();
+                return; // cancela navegación durante easter egg
+            }
             if (!window.location.pathname.startsWith('/asistente')) {
                 window.location.href = '/asistente';
             }

@@ -8,7 +8,7 @@
     <!-- Fuentes (SPEC 8.3): Inter + JetBrains Mono via Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=M+PLUS+Rounded+1c:wght@400&display=swap" rel="stylesheet">
 
     <!-- CSS de SME -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
@@ -77,5 +77,7 @@
 
     <script>window.GERTY_STATE = {{ gerty_state | tojson }};</script>
     <script src="{{ url_for('static', filename='js/gerty.js') }}" defer></script>
+
+    <div class="firma-proyecto" aria-hidden="true">トゥリ＆ガーティ制作 2026</div>
 </body>
 </html>

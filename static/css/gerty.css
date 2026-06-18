@@ -12,6 +12,7 @@
     animation: gerty-float 4s ease-in-out infinite;
     transition: filter 150ms ease-out;
     user-select: none;
+    overflow: visible;
 }
 
 .gerty-widget:hover {
@@ -22,18 +23,21 @@
     width: 100px;
     height: 147px;
     display: block;
+    overflow: visible;
 }
 
 /* ── Avatar en /asistente (header del chat) ── */
 .gerty-avatar {
     flex-shrink: 0;
     cursor: default;
+    overflow: visible;
 }
 
 .gerty-avatar .gerty-svg {
     width: 46px;
     height: 68px;
     display: block;
+    overflow: visible;
 }
 
 /* ── Animación flotante idle ── */
@@ -42,35 +46,48 @@
     50%       { transform: translateY(-3px); }
 }
 
-/* ── Wiggle easter egg ── */
-@keyframes gerty-wiggle {
+/* ── Inclinación dormido ── */
+#gerty-head {
+    transform-box: fill-box;
+    transform-origin: bottom center;
+    transition: transform 300ms ease;
+}
+.gerty-svg[data-state="dormido"] #gerty-head {
+    transform: rotate(-20deg);
+}
+
+/* ── Wiggle enojado (breve, ±2°) ── */
+@keyframes gerty-enojado-wiggle {
     0%, 100% { transform: rotate(0deg); }
-    20%       { transform: rotate(-5deg); }
-    60%       { transform: rotate(5deg); }
-    80%       { transform: rotate(-3deg); }
+    25%       { transform: rotate(-2deg); }
+    75%       { transform: rotate(2deg); }
 }
 
-.gerty-widget.gerty-wiggle,
-.gerty-avatar.gerty-wiggle {
-    animation: gerty-wiggle 0.6s ease-in-out !important;
+.gerty-widget.gerty-enojado-anim,
+.gerty-avatar.gerty-enojado-anim,
+.gerty-svg.gerty-enojado-anim {
+    animation: gerty-enojado-wiggle 200ms ease-in-out !important;
 }
 
-/* ── Animaciones zZ dormido ── */
+/* ── Animaciones zZ dormido (derivan hacia la IZQUIERDA) ── */
 @keyframes gerty-z-drift {
     0%   { opacity: 0.7; transform: translate(0, 0) scale(1); }
-    100% { opacity: 0;   transform: translate(5px, -14px) scale(1.1); }
+    100% { opacity: 0;   transform: translate(-5px, -14px) scale(1.1); }
 }
 
 .gerty-z1 { animation: gerty-z-drift 2.5s ease-out infinite; }
 .gerty-z2 { animation: gerty-z-drift 2.5s ease-out 1.25s infinite; }
 
-/* ── Animación estrella happy ── */
-@keyframes gerty-star-pop {
-    0%, 100% { transform: scale(1); }
-    50%       { transform: scale(1.3); }
+/* ── Babita dormido ── */
+@keyframes gerty-babita {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(4px); }
 }
-
-.gerty-star { animation: gerty-star-pop 0.4s ease-in-out 4; }
+.gerty-babita-drop {
+    transform-box: fill-box;
+    transform-origin: center top;
+    animation: gerty-babita 2.5s ease-in-out infinite;
+}
 
 /* ── Etiqueta de contexto (nombre de la ruta) ── */
 .gerty-ctx-label {
@@ -88,7 +105,8 @@
 .gerty-svg[data-state="dormido"]    #gerty-led { fill: #2a2a35; }
 .gerty-svg[data-state="procesando"] #gerty-led { fill: #FFB84D; }
 .gerty-svg[data-state="happy"]      #gerty-led { fill: #5EE8B4; }
-.gerty-svg.is-easter                #gerty-led { fill: #C084FC !important; }
+.gerty-svg[data-state="enojado"]    #gerty-led { fill: #FF7A8A; }
+.gerty-svg[data-state="chiveado"]   #gerty-led { fill: #FF9FCB; }
 
 /* ── Cuerpo opaco en estado dormido ── */
 .gerty-svg[data-state="dormido"] #gerty-body {
@@ -103,6 +121,9 @@
 .gerty-svg[data-state="procesando"] #gerty-eyes-procesando { display: block; }
 .gerty-svg[data-state="happy"]      #gerty-eyes-happy      { display: block; }
 .gerty-svg[data-state="turno_turi"] #gerty-eyes-turno_turi { display: block; }
+.gerty-svg[data-state="enojado"]    #gerty-eyes-enojado    { display: block; }
+.gerty-svg[data-state="enojado"]    #gerty-cejas-enojado   { display: block; }
+.gerty-svg[data-state="chiveado"]   #gerty-eyes-chiveado   { display: block; }
 
 /* ── Boca: mostrar el grupo correcto según data-state ── */
 .gerty-svg[data-state="default"]    #gerty-mouth-default    { display: block; }
@@ -111,12 +132,13 @@
 .gerty-svg[data-state="procesando"] #gerty-mouth-procesando { display: block; }
 .gerty-svg[data-state="happy"]      #gerty-mouth-happy      { display: block; }
 .gerty-svg[data-state="turno_turi"] #gerty-mouth-turno_turi { display: block; }
+.gerty-svg[data-state="enojado"]    #gerty-mouth-enojado    { display: block; }
+.gerty-svg[data-state="chiveado"]   #gerty-mouth-chiveado   { display: block; }
+.gerty-svg[data-state="chiveado"]   #gerty-cachetes-chiveado { display: block; }
 
-/* ── zZ dormido ── */
-.gerty-svg[data-state="dormido"] #gerty-zzz { display: block; }
-
-/* ── Easter egg ── */
-.gerty-svg.is-easter #gerty-easter { display: block !important; }
+/* ── Extras por estado ── */
+.gerty-svg[data-state="dormido"] #gerty-zzz    { display: block; }
+.gerty-svg[data-state="dormido"] #gerty-babita { display: block; }
 
 /* ── Parpadeo: oculta todos los grupos de ojos y muestra el de parpadeo ── */
 .gerty-svg.is-blinking [id^="gerty-eyes-"] { display: none !important; }
