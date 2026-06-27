@@ -144,12 +144,12 @@
             <div class="mini-widget mini-widget--clima">
                 <div class="mw-top">
                     <div class="mw-icon">
-                        {{ wx_icon(clima_data.categoria, 32, True) }}
+                        {{ wx_icon(clima_data.categoria, 32, True, clima_data.es_dia if clima_data.es_dia is defined else True) }}
                     </div>
                     <div class="mw-datos">
                         <span class="mw-num">{% if clima_data.temp is not none %}{{ clima_data.temp }}°{% else %}—{% endif %}</span>
                         <span class="mw-label">{{ clima_data.desc | capitalize if clima_data.desc else 'Aguascalientes' }}</span>
-                        <span class="mw-sub">Aguascalientes</span>
+                        <span class="mw-sub">Calvillo, Ags.</span>
                     </div>
                 </div>
                 <div class="mw-expand">
@@ -158,7 +158,7 @@
                         {% for h in clima_data.forecast %}
                         <div class="wx-fc-col">
                             <span class="wx-fc-hora">{{ h.hora }}</span>
-                            {{ wx_icon(h.categoria, 14, False) }}
+                            {{ wx_icon(h.categoria, 14, False, h.es_dia if h.es_dia is defined else True) }}
                             <span class="wx-fc-temp">{{ h.temp }}°</span>
                         </div>
                         {% endfor %}

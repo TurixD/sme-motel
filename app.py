@@ -309,7 +309,7 @@ _WMO = {
 }
 
 _CLIMA_FALLBACK: dict = {
-    "valor": "Aguascalientes", "temp": None, "code": None,
+    "valor": "Calvillo, Ags.", "temp": None, "code": None,
     "desc": "", "categoria": "nublado", "forecast": [],
 }
 
@@ -334,9 +334,9 @@ def _obtener_clima() -> dict:
 
     url = (
         "https://api.open-meteo.com/v1/forecast"
-        "?latitude=21.88&longitude=-102.29"
-        "&current=temperature_2m,weather_code"
-        "&hourly=temperature_2m,weather_code"
+        "?latitude=21.8459&longitude=-102.7188"
+        "&current=temperature_2m,weather_code,is_day"
+        "&hourly=temperature_2m,weather_code,is_day"
         "&forecast_days=2"
         "&timezone=America/Mexico_City"
     )
@@ -345,16 +345,18 @@ def _obtener_clima() -> dict:
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read())
 
-        temp = round(data["current"]["temperature_2m"])
-        code = int(data["current"]["weather_code"])
-        desc = _WMO.get(code, "variable")
-        cat  = _wmo_categoria(code)
+        temp   = round(data["current"]["temperature_2m"])
+        code   = int(data["current"]["weather_code"])
+        es_dia = bool(data["current"].get("is_day", 1))
+        desc   = _WMO.get(code, "variable")
+        cat    = _wmo_categoria(code)
 
         # Próximas 6 horas desde la hora actual
         cur_hora  = int(data["current"]["time"][11:13])
         h_times   = data["hourly"]["time"]
         h_temps   = data["hourly"]["temperature_2m"]
         h_codes   = data["hourly"]["weather_code"]
+        h_isday   = data["hourly"].get("is_day", [])
         forecast  = []
         for i in range(1, 7):
             idx = cur_hora + i
@@ -366,6 +368,7 @@ def _obtener_clima() -> dict:
                     "code":      hc,
                     "desc":      _WMO.get(hc, "variable"),
                     "categoria": _wmo_categoria(hc),
+                    "es_dia":    bool(h_isday[idx]) if idx < len(h_isday) else True,
                 })
 
         resultado = {
@@ -374,6 +377,7 @@ def _obtener_clima() -> dict:
             "code":      code,
             "desc":      desc,
             "categoria": cat,
+            "es_dia":    es_dia,
             "forecast":  forecast,
         }
         _CLIMA_CACHE = {"data": resultado, "ts": ahora}

@@ -150,6 +150,7 @@ a {
 }
 
 .bottom-nav__item {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -159,6 +160,30 @@ a {
     color: var(--text-secondary);
     transition: background-color var(--transition-hover),
                 color var(--transition-hover);
+}
+
+.bottom-nav__item::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms ease;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+}
+
+.bottom-nav__item:hover::before {
+    opacity: 1;
 }
 
 .bottom-nav__item:hover {

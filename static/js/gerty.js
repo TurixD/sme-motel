@@ -117,7 +117,7 @@
         }
     }
 
-    /* ── Easter egg: enojado → chiveado (solo desde dormido) ── */
+    /* ── Easter egg: enojado → chiveado (desde dormido) o chiveado directo (despierto) ── */
     function activarEnojado() {
         easterActive = true;
         setState('enojado');
@@ -140,13 +140,27 @@
         }, 2000);
     }
 
-    /* ── Click: redirigir a /asistente (simple), easter egg desde dormido (doble) ── */
+    function activarChiveadoDirecto() {
+        var estadoAnterior = currentState;
+        easterActive = true;
+        if (easterTimer) clearTimeout(easterTimer);
+        setState('chiveado');
+        easterTimer = setTimeout(function () {
+            easterActive = false;
+            setState(estadoAnterior);
+        }, 2000);
+    }
+
+    /* ── Click: redirigir a /asistente (simple), easter egg (doble) ── */
     var singleTimer = null;
     svg.addEventListener('dblclick', function (e) {
         e.preventDefault();
         clearTimeout(singleTimer);
-        if (currentState === 'dormido') activarEnojado();
-        // cualquier otro estado: no hace nada
+        if (currentState === 'dormido') {
+            activarEnojado();
+        } else {
+            activarChiveadoDirecto();
+        }
     });
     svg.addEventListener('click', function () {
         clearTimeout(singleTimer);
