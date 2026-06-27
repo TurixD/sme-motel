@@ -10,7 +10,8 @@ import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, url_for
+from werkzeug.security import check_password_hash
 
 from config import Config
 from logger import get_logger, log_action, setup_logging
@@ -445,6 +446,29 @@ def _gerty_context() -> dict:
     }
 
 
+def get_modo_actual() -> str:
+    """Lee el modo activo desde BD. Fuente de verdad única."""
+    try:
+        with sqlite3.connect(Config.DB_PATH) as conn:
+            row = conn.execute(
+                "SELECT valor FROM configuracion WHERE clave='modo_actual'"
+            ).fetchone()
+            return row[0] if row else "admin_turi"
+    except Exception:
+        return "admin_turi"
+
+
+def set_modo_actual(nuevo_modo: str) -> None:
+    """Persiste el modo activo en BD y loggea la acción."""
+    with sqlite3.connect(Config.DB_PATH) as conn:
+        conn.execute(
+            "UPDATE configuracion SET valor=? WHERE clave='modo_actual'",
+            (nuevo_modo,),
+        )
+        conn.commit()
+    log_action("Modo activo cambiado a: %s", nuevo_modo)
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -475,11 +499,21 @@ def create_app() -> Flask:
     @app.context_processor
     def inject_globals():
         clima_obj = _obtener_clima()
+        modo = get_modo_actual()
+        es_admin = modo.startswith("admin_")
+        admin_nombre = None
+        if modo == "admin_turi":
+            admin_nombre = "Turi"
+        elif modo == "admin_gabriel":
+            admin_nombre = "Gabriel"
         return {
-            "fecha_actual": _fecha_es(datetime.now()),
-            "clima":        clima_obj["valor"],
-            "clima_data":   clima_obj,
-            "gerty_state":  _gerty_context(),
+            "fecha_actual":  _fecha_es(datetime.now()),
+            "clima":         clima_obj["valor"],
+            "clima_data":    clima_obj,
+            "gerty_state":   _gerty_context(),
+            "modo_actual":   modo,
+            "es_admin":      es_admin,
+            "admin_nombre":  admin_nombre,
         }
 
     @app.route("/")
@@ -487,6 +521,37 @@ def create_app() -> Flask:
         data = _dash_data(Config.DB_PATH)
         log_action("Visita al dashboard (/)")
         return render_template("dashboard.html", **data)
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if request.method == "GET" and get_modo_actual().startswith("admin_"):
+            return redirect(url_for("index"))
+        error = None
+        if request.method == "POST":
+            username = (request.form.get("username") or "").strip().lower()
+            password = request.form.get("password") or ""
+            with sqlite3.connect(Config.DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                usuario = conn.execute(
+                    "SELECT username, password_hash, nombre_display, activo "
+                    "FROM usuarios WHERE username=?",
+                    (username,),
+                ).fetchone()
+            if usuario and usuario["activo"] and check_password_hash(usuario["password_hash"], password):
+                nuevo_modo = f"admin_{usuario['username']}"
+                set_modo_actual(nuevo_modo)
+                log_action("Login admin exitoso: %s", usuario["username"])
+                return redirect(url_for("index"))
+            else:
+                log_action("Login fallido: usuario '%s'", username)
+                error = "Usuario o contraseña incorrectos"
+        return render_template("login.html", error=error)
+
+    @app.route("/logout", methods=["POST"])
+    def logout():
+        set_modo_actual("empleado")
+        log_action("Toggle a modo empleado")
+        return redirect(url_for("index"))
 
     @app.route("/api/gerty/estado")
     def gerty_estado():

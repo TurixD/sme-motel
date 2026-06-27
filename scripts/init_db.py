@@ -14,6 +14,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from werkzeug.security import generate_password_hash
+
 # Raiz del proyecto = carpeta padre de /scripts
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "database" / "sme.db"
@@ -191,6 +193,42 @@ def migrar() -> None:
             """)
             migraciones += 1
             print("  reportes_narrativas: tabla creada")
+
+        # v2.0 — tabla usuarios
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "usuarios" not in tablas:
+            conn.execute("""
+                CREATE TABLE usuarios (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username       TEXT    UNIQUE NOT NULL,
+                    password_hash  TEXT    NOT NULL,
+                    nombre_display TEXT    NOT NULL,
+                    activo         INTEGER NOT NULL DEFAULT 1
+                )
+            """)
+            for uname, display in [("turi", "Turi"), ("gabriel", "Gabriel")]:
+                conn.execute(
+                    "INSERT OR IGNORE INTO usuarios "
+                    "(username, password_hash, nombre_display) VALUES (?,?,?)",
+                    (uname, generate_password_hash("cambiar123"), display),
+                )
+            migraciones += 1
+            print("  usuarios: tabla creada con 2 admins (pass inicial: cambiar123)")
+
+        # v2.0 — clave modo_actual en configuracion
+        existe_modo = conn.execute(
+            "SELECT 1 FROM configuracion WHERE clave='modo_actual'"
+        ).fetchone()
+        if not existe_modo:
+            conn.execute(
+                "INSERT INTO configuracion (clave, valor, descripcion) VALUES (?,?,?)",
+                ("modo_actual", "admin_turi",
+                 "Modo activo del sistema: admin_turi | admin_gabriel | empleado"),
+            )
+            migraciones += 1
+            print("  configuracion: clave 'modo_actual' agregada (valor inicial: admin_turi)")
 
         conn.commit()
         if migraciones == 0:

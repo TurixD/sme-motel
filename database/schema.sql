@@ -344,3 +344,14 @@ CREATE TABLE IF NOT EXISTS matches_aprendidos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_matches_sku ON matches_aprendidos(sku_sams);
+
+-- -------------------------------------------------------------
+-- v2.0  usuarios (admins con login)
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS usuarios (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    username       TEXT    UNIQUE NOT NULL,              -- 'turi' | 'gabriel'
+    password_hash  TEXT    NOT NULL,
+    nombre_display TEXT    NOT NULL,                     -- 'Turi' | 'Gabriel'
+    activo         INTEGER NOT NULL DEFAULT 1            -- boolean
+);
