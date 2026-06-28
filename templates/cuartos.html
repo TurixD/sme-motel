@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+
+{% block title %}Cuartos — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cuartos.css') }}">
+{% endblock %}
+
+{% block content %}
+
+{%- set tipo_labels = {'suite': 'Suite', 'sencilla': 'Sencilla', 'sencilla_jacuzzi': 'c/Jac', 'doble_jacuzzi': 'Doble'} -%}
+
+<div class="page-header">
+    <h1 class="page-title">Cuartos</h1>
+</div>
+
+<!-- ═══════════════════════════════════════ GRID DE CUARTOS -->
+<section class="cuartos-section">
+
+    <!-- Suite -->
+    <div class="cuartos-group">
+        <h2 class="cuartos-group__label">Suite</h2>
+        <div class="cuartos-grid">
+            {% for c in cuartos if c.tipo == 'suite' %}
+            <button class="cuarto-card" type="button" data-cuarto-id="{{ c.id }}">
+                <svg class="cuarto-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+                </svg>
+                <span class="cuarto-card__num">{{ c.numero }}</span>
+                <span class="cuarto-card__tipo">{{ tipo_labels[c.tipo] }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Sencillas -->
+    <div class="cuartos-group">
+        <h2 class="cuartos-group__label">Sencillas</h2>
+        <div class="cuartos-grid">
+            {% for c in cuartos if c.tipo == 'sencilla' %}
+            <button class="cuarto-card" type="button" data-cuarto-id="{{ c.id }}">
+                <svg class="cuarto-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 4v16M22 4v16M2 8h20M2 16h20M10 8v8M14 8v8"/>
+                </svg>
+                <span class="cuarto-card__num">{{ c.numero }}</span>
+                <span class="cuarto-card__tipo">{{ tipo_labels[c.tipo] }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Con Jacuzzi -->
+    <div class="cuartos-group">
+        <h2 class="cuartos-group__label">Con Jacuzzi</h2>
+        <div class="cuartos-grid">
+            {% for c in cuartos if c.tipo in ('sencilla_jacuzzi', 'doble_jacuzzi') %}
+            <button class="cuarto-card" type="button" data-cuarto-id="{{ c.id }}">
+                <svg class="cuarto-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 6 6.5 3.5a1.5 1.5 0 0 0-1-.4 2 2 0 0 0-2 2 1.5 1.5 0 0 0 .4 1L7 9"/>
+                    <path d="M5 10a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2z"/>
+                    <path d="M7 16v2M17 16v2"/>
+                </svg>
+                <span class="cuarto-card__num">{{ c.numero }}</span>
+                <span class="cuarto-card__tipo">{{ tipo_labels[c.tipo] }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════ FEED DE ACTIVIDAD -->
+<section class="actividad-section">
+    <div class="actividad-header">
+        <h2 class="actividad-title">Actividad del día</h2>
+        {% if es_admin %}
+        <a href="/cuartos/historial" class="btn btn--ghost btn--sm">Ver historial completo</a>
+        {% endif %}
+    </div>
+
+    <div id="feed-list" class="feed-list">
+        {% if rentas_dia %}
+            {% for r in rentas_dia %}
+            <div class="feed-item {% if r.estado == 'cancelado' %}feed-item--cancelado{% endif %} feed-item--clickable"
+                 data-renta-id="{{ r.id }}">
+                <span class="feed-item__hora">{{ r.hora_registro[:5] }}</span>
+                <div class="feed-item__body">
+                    <span class="feed-item__tipo">Renta</span>
+                    <span class="feed-item__desc">Cuarto {{ r.cuarto_id }} · {{ r.nombre_display }} · {{ r.duracion_horas }}h</span>
+                    <span class="feed-item__monto">
+                        {{ r.precio_cobrado | moneda }}
+                        {% if r.editado %}
+                        <span class="feed-item__editado" title="Precio original: {{ r.precio_default | moneda }}">⚠</span>
+                        {% endif %}
+                    </span>
+                    {% if r.estado == 'cancelado' %}
+                    <span class="feed-item__badge-cancelado">Cancelado</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="feed-empty">Sin actividad registrada hoy.</p>
+        {% endif %}
+    </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════ MODAL: ADVERTENCIA SOLAPAMIENTO -->
+<div class="modal-overlay" id="modal-advertencia" hidden>
+    <div class="modal-card modal-card--sm">
+        <p class="modal-card__body" id="advertencia-msg" style="margin-bottom: var(--space-4)"></p>
+        <div class="modal-card__actions">
+            <button class="btn btn--ghost" id="btn-adv-cancelar" type="button">Cancelar</button>
+            <button class="btn btn--primary" id="btn-adv-continuar" type="button">Continuar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ MODAL: REGISTRO DE RENTA -->
+<div class="modal-overlay" id="modal-registro" hidden>
+    <div class="modal-card modal-card--registro">
+        <h3 class="modal-card__title" id="modal-reg-title"></h3>
+
+        <div class="form-group">
+            <label class="form-label">Duración</label>
+            <div class="dur-selector" id="reg-dur-selector">
+                <button class="dur-btn dur-btn--active" data-dur="6"  type="button">6h  <span class="dur-btn__price"></span></button>
+                <button class="dur-btn"                 data-dur="12" type="button">12h <span class="dur-btn__price"></span></button>
+                <button class="dur-btn"                 data-dur="18" type="button">18h <span class="dur-btn__price"></span></button>
+                <button class="dur-btn"                 data-dur="24" type="button">24h <span class="dur-btn__price"></span></button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="reg-precio">Precio cobrado</label>
+            <input class="form-input" type="number" id="reg-precio" min="0" step="1" placeholder="0">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="reg-notas">Notas (opcional)</label>
+            <textarea class="form-input form-textarea" id="reg-notas" rows="2" placeholder="Observaciones..."></textarea>
+        </div>
+
+        <p class="form-error" id="reg-error" hidden></p>
+
+        <div class="modal-card__actions">
+            <button class="btn btn--ghost" id="btn-reg-cancelar" type="button">Cancelar</button>
+            <button class="btn btn--primary" id="btn-reg-confirmar" type="button">Registrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ MODAL: DETALLE (admin) -->
+<div class="modal-overlay" id="modal-detalle" hidden>
+    <div class="modal-card modal-card--detalle" id="modal-detalle-content">
+        <!-- Contenido generado dinámicamente por JS -->
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ TOAST -->
+<div class="toast" id="toast" hidden></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.CUARTOS_DATA   = {{ cuartos | tojson }};
+window.FEED_ITEMS     = {{ rentas_dia | tojson }};
+window.RENTAS_ACTIVAS = {{ rentas_activas_json | tojson }};
+window.ES_ADMIN       = {{ es_admin | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/cuartos.js') }}" defer></script>
+{% endblock %}

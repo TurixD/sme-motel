@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+
+{% block title %}Historial de Cuartos — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cuartos.css') }}">
+<style>
+.hist-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: flex-end;
+    margin-bottom: var(--space-6);
+}
+
+.hist-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.hist-filter-group label {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 600;
+}
+
+.hist-total {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-4);
+}
+
+.hist-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.hist-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.hist-table thead {
+    background: var(--bg-tertiary);
+}
+
+.hist-table th {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.hist-table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    vertical-align: middle;
+}
+
+.hist-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.hist-table tbody tr:hover td {
+    background: var(--bg-tertiary);
+}
+
+.hist-table tbody tr.cancelado td {
+    opacity: 0.5;
+}
+
+.hist-table tbody tr.cancelado .col-desc {
+    text-decoration: line-through;
+}
+
+.col-mono {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+.badge-cancelado {
+    display: inline-block;
+    font-size: 10px;
+    color: var(--status-error);
+    border: 1px solid color-mix(in srgb, var(--status-error) 35%, transparent);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+    white-space: nowrap;
+}
+
+.badge-editado {
+    font-size: 12px;
+    color: var(--status-warning);
+    cursor: help;
+    margin-left: 4px;
+}
+
+.hist-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-top: var(--space-6);
+}
+
+.hist-pag-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: background var(--transition-hover), color var(--transition-hover);
+}
+
+.hist-pag-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.hist-pag-btn--active {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-ai);
+    color: var(--accent-ai);
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.hist-pag-btn--disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.hist-pag-info {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+    margin: 0 var(--space-2);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <div style="display:flex; align-items:center; gap:var(--space-3)">
+        <a href="/cuartos" class="btn btn--ghost btn--sm">← Volver</a>
+        <h1 class="page-title">Historial de Rentas</h1>
+    </div>
+</div>
+
+<!-- Filtros -->
+<form class="hist-filters" method="GET" action="/cuartos/historial">
+    <div class="hist-filter-group">
+        <label for="f-fecha">Fecha</label>
+        <input class="form-input" type="date" id="f-fecha" name="fecha"
+               value="{{ filtro_fecha }}" style="width: 160px">
+    </div>
+    <div class="hist-filter-group">
+        <label for="f-cuarto">Cuarto</label>
+        <select class="form-input" id="f-cuarto" name="cuarto" style="width: 160px">
+            <option value="">Todos</option>
+            {% for c in cuartos_lista %}
+            <option value="{{ c.id }}" {% if filtro_cuarto == c.id|string %}selected{% endif %}>
+                {{ c.numero }} — {{ c.nombre_display }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="hist-filter-group">
+        <label for="f-estado">Estado</label>
+        <select class="form-input" id="f-estado" name="estado" style="width: 130px">
+            <option value="">Todos</option>
+            <option value="activo"    {% if filtro_estado == 'activo'    %}selected{% endif %}>Activo</option>
+            <option value="cancelado" {% if filtro_estado == 'cancelado' %}selected{% endif %}>Cancelado</option>
+        </select>
+    </div>
+    <button class="btn btn--primary btn--sm" type="submit">Filtrar</button>
+    {% if filtro_fecha or filtro_cuarto or filtro_estado %}
+    <a href="/cuartos/historial" class="btn btn--ghost btn--sm">Limpiar</a>
+    {% endif %}
+</form>
+
+<p class="hist-total">{{ total }} registro{{ 's' if total != 1 else '' }}</p>
+
+{% if rentas %}
+<div class="hist-table-wrap">
+    <table class="hist-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Cuarto</th>
+                <th>Dur.</th>
+                <th>Precio</th>
+                <th>Por</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rentas %}
+            <tr class="{{ 'cancelado' if r.estado == 'cancelado' else '' }}">
+                <td class="col-mono" style="color:var(--text-tertiary)">{{ r.id }}</td>
+                <td class="col-mono">{{ r.fecha }}</td>
+                <td class="col-mono">{{ r.hora_registro[:5] }}</td>
+                <td class="col-desc">
+                    <span style="font-family:var(--font-mono);font-weight:600;color:var(--text-primary)">{{ r.cuarto_id }}</span>
+                    <span style="color:var(--text-tertiary)"> · {{ r.nombre_display }}</span>
+                </td>
+                <td class="col-mono">{{ r.duracion_horas }}h</td>
+                <td class="col-mono" style="color:var(--text-primary)">
+                    {{ r.precio_cobrado | moneda }}
+                    {% if r.editado %}
+                    <span class="badge-editado" title="Original: {{ r.precio_default | moneda }}">⚠</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if r.registrado_por == 'admin_turi' %}Turi
+                    {% elif r.registrado_por == 'admin_gabriel' %}Gabriel
+                    {% else %}Empleado{% endif %}
+                </td>
+                <td>
+                    {% if r.estado == 'cancelado' %}
+                    <span class="badge-cancelado">Cancelado</span>
+                    {% else %}
+                    <span style="color:var(--accent-income);font-size:var(--text-xs)">Activo</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Paginación -->
+{% if paginas_total > 1 %}
+<div class="hist-pagination">
+    {% set q_fecha  = '&fecha='  + filtro_fecha  if filtro_fecha  else '' %}
+    {% set q_cuarto = '&cuarto=' + filtro_cuarto if filtro_cuarto else '' %}
+    {% set q_estado = '&estado=' + filtro_estado if filtro_estado else '' %}
+    {% set q_base   = q_fecha + q_cuarto + q_estado %}
+
+    <a class="hist-pag-btn {{ 'hist-pag-btn--disabled' if pagina <= 1 else '' }}"
+       href="/cuartos/historial?p={{ pagina - 1 }}{{ q_base }}">‹</a>
+
+    {% for p in range(1, paginas_total + 1) %}
+        {% if p == pagina or (p >= pagina - 2 and p <= pagina + 2) or p == 1 or p == paginas_total %}
+        <a class="hist-pag-btn {{ 'hist-pag-btn--active' if p == pagina else '' }}"
+           href="/cuartos/historial?p={{ p }}{{ q_base }}">{{ p }}</a>
+        {% elif p == pagina - 3 or p == pagina + 3 %}
+        <span class="hist-pag-info">…</span>
+        {% endif %}
+    {% endfor %}
+
+    <a class="hist-pag-btn {{ 'hist-pag-btn--disabled' if pagina >= paginas_total else '' }}"
+       href="/cuartos/historial?p={{ pagina + 1 }}{{ q_base }}">›</a>
+</div>
+{% endif %}
+
+{% else %}
+<p class="feed-empty" style="padding: var(--space-8); text-align:center">
+    No se encontraron rentas con los filtros aplicados.
+</p>
+{% endif %}
+
+{% endblock %}

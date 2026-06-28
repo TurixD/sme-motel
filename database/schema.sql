@@ -355,3 +355,42 @@ CREATE TABLE IF NOT EXISTS usuarios (
     nombre_display TEXT    NOT NULL,                     -- 'Turi' | 'Gabriel'
     activo         INTEGER NOT NULL DEFAULT 1            -- boolean
 );
+
+-- -------------------------------------------------------------
+-- v2.1  cuartos (catálogo estático — 10 cuartos del motel)
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cuartos (
+    id             INTEGER PRIMARY KEY,                  -- igual que numero
+    numero         INTEGER UNIQUE NOT NULL,
+    tipo           TEXT    NOT NULL,                     -- 'suite' | 'sencilla' | 'sencilla_jacuzzi' | 'doble_jacuzzi'
+    nombre_display TEXT    NOT NULL,
+    precio_6h      REAL    NOT NULL,
+    precio_12h     REAL    NOT NULL,
+    precio_18h     REAL    NOT NULL,
+    precio_24h     REAL    NOT NULL
+);
+
+-- -------------------------------------------------------------
+-- v2.1  rentas (transacciones de renta de cuartos)
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS rentas (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuarto_id          INTEGER NOT NULL,
+    fecha              TEXT    NOT NULL,                 -- date 'YYYY-MM-DD'
+    hora_registro      TEXT    NOT NULL,                 -- time 'HH:MM:SS' — servidor, inmutable
+    duracion_horas     INTEGER NOT NULL,                 -- 6 | 12 | 18 | 24
+    precio_default     REAL    NOT NULL,                 -- precio de tabla al registrar
+    precio_cobrado     REAL    NOT NULL,                 -- precio real cobrado
+    notas              TEXT,
+    estado             TEXT    NOT NULL DEFAULT 'activo',-- 'activo' | 'cancelado'
+    registrado_por     TEXT    NOT NULL,                 -- 'admin_turi' | 'admin_gabriel' | 'empleado'
+    cancelado_por      TEXT,
+    cancelado_at       TEXT,                             -- datetime 'YYYY-MM-DD HH:MM:SS'
+    motivo_cancelacion TEXT,
+    editado            INTEGER NOT NULL DEFAULT 0,       -- boolean: precio_cobrado != precio_default
+    editado_por        TEXT,                             -- quién hizo la última edición
+    FOREIGN KEY (cuarto_id) REFERENCES cuartos(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rentas_fecha   ON rentas(fecha);
+CREATE INDEX IF NOT EXISTS idx_rentas_cuarto  ON rentas(cuarto_id);

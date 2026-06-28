@@ -86,6 +86,9 @@
         <a href="/" class="bottom-nav__item {{ 'is-active' if request.path == '/' }}" data-tooltip="Dashboard" aria-label="Dashboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </a>
+        <a href="/cuartos" class="bottom-nav__item {{ 'is-active' if request.path.startswith('/cuartos') }}" data-tooltip="Cuartos" aria-label="Cuartos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="7" y="3" width="10" height="18" rx="1"/><circle cx="14" cy="12" r="1" fill="currentColor"/></svg>
+        </a>
         <a href="/ingresos" class="bottom-nav__item {{ 'is-active' if request.path.startswith('/ingresos') }}" data-tooltip="Ingresos" aria-label="Ingresos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </a>

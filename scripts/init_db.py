@@ -54,6 +54,29 @@ def crear_bd(reset: bool = False) -> None:
         print(f"  - {nombre}")
 
 
+_CUARTOS_SEED = [
+    (1,  1,  "suite",            "Suite con jacuzzi y balcón", 700.0, 1050.0, 1400.0, 1550.0),
+    (2,  2,  "sencilla",         "Sencilla",                   350.0,  500.0,  700.0,  800.0),
+    (3,  3,  "sencilla",         "Sencilla",                   350.0,  500.0,  700.0,  800.0),
+    (4,  4,  "sencilla",         "Sencilla",                   350.0,  500.0,  700.0,  800.0),
+    (5,  5,  "sencilla",         "Sencilla",                   350.0,  500.0,  700.0,  800.0),
+    (6,  6,  "sencilla",         "Sencilla",                   350.0,  500.0,  700.0,  800.0),
+    (7,  7,  "sencilla",         "Sencilla",                   350.0,  500.0,  700.0,  800.0),
+    (8,  8,  "sencilla",         "Sencilla",                   350.0,  500.0,  700.0,  800.0),
+    (9,  9,  "sencilla_jacuzzi", "Sencilla con jacuzzi",       500.0,  750.0, 1000.0, 1100.0),
+    (10, 10, "doble_jacuzzi",    "Doble con jacuzzi",          600.0,  900.0, 1200.0, 1350.0),
+]
+
+
+def _seed_cuartos(conn) -> None:
+    conn.executemany(
+        "INSERT OR IGNORE INTO cuartos "
+        "(id, numero, tipo, nombre_display, precio_6h, precio_12h, precio_18h, precio_24h) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        _CUARTOS_SEED,
+    )
+
+
 def migrar() -> None:
     """Aplica migraciones de esquema sobre BD existente (idempotente)."""
     if not DB_PATH.exists():
@@ -229,6 +252,74 @@ def migrar() -> None:
             )
             migraciones += 1
             print("  configuracion: clave 'modo_actual' agregada (valor inicial: admin_turi)")
+
+        # v2.1 — columna editado_por en rentas (si la tabla ya existía sin ella)
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "rentas" in tablas:
+            cols_rentas = {row[1] for row in conn.execute("PRAGMA table_info(rentas)").fetchall()}
+            if "editado_por" not in cols_rentas:
+                conn.execute("ALTER TABLE rentas ADD COLUMN editado_por TEXT")
+                migraciones += 1
+                print("  rentas: columna 'editado_por' agregada (v2.1)")
+
+        # v2.1 — tabla cuartos (catálogo estático)
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "cuartos" not in tablas:
+            conn.execute("""
+                CREATE TABLE cuartos (
+                    id             INTEGER PRIMARY KEY,
+                    numero         INTEGER UNIQUE NOT NULL,
+                    tipo           TEXT    NOT NULL,
+                    nombre_display TEXT    NOT NULL,
+                    precio_6h      REAL    NOT NULL,
+                    precio_12h     REAL    NOT NULL,
+                    precio_18h     REAL    NOT NULL,
+                    precio_24h     REAL    NOT NULL
+                )
+            """)
+            _seed_cuartos(conn)
+            migraciones += 1
+            print("  cuartos: tabla creada con 10 registros (seed v2.1)")
+        else:
+            # Tabla existe — verificar que tiene datos y rellenar si está vacía
+            count = conn.execute("SELECT COUNT(*) FROM cuartos").fetchone()[0]
+            if count == 0:
+                _seed_cuartos(conn)
+                migraciones += 1
+                print("  cuartos: seed aplicado (tabla estaba vacía)")
+
+        # v2.1 — tabla rentas
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "rentas" not in tablas:
+            conn.execute("""
+                CREATE TABLE rentas (
+                    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cuarto_id          INTEGER NOT NULL,
+                    fecha              TEXT    NOT NULL,
+                    hora_registro      TEXT    NOT NULL,
+                    duracion_horas     INTEGER NOT NULL,
+                    precio_default     REAL    NOT NULL,
+                    precio_cobrado     REAL    NOT NULL,
+                    notas              TEXT,
+                    estado             TEXT    NOT NULL DEFAULT 'activo',
+                    registrado_por     TEXT    NOT NULL,
+                    cancelado_por      TEXT,
+                    cancelado_at       TEXT,
+                    motivo_cancelacion TEXT,
+                    editado            INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (cuarto_id) REFERENCES cuartos(id)
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_rentas_fecha  ON rentas(fecha)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_rentas_cuarto ON rentas(cuarto_id)")
+            migraciones += 1
+            print("  rentas: tabla creada (v2.1)")
 
         conn.commit()
         if migraciones == 0:
