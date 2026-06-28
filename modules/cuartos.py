@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from config import Config
 from logger import log_action
+from modules.auth import solo_admin
 
 cuartos_bp = Blueprint("cuartos", __name__)
 
@@ -164,6 +165,7 @@ def api_registrar():
 # ── API: cancelar renta ──────────────────────────────────────
 
 @cuartos_bp.route("/cuartos/api/cancelar/<int:renta_id>", methods=["POST"])
+@solo_admin
 def api_cancelar(renta_id: int):
     data   = request.get_json(silent=True) or {}
     motivo = (data.get("motivo") or "").strip() or None
@@ -243,6 +245,7 @@ def api_editar(renta_id: int):
 # ── Historial completo ────────────────────────────────────────
 
 @cuartos_bp.route("/cuartos/historial")
+@solo_admin
 def historial():
     POR_PAGINA = 20
     pagina     = max(1, int(request.args.get("p", 1)))

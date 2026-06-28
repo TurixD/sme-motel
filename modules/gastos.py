@@ -17,6 +17,7 @@ from flask import Blueprint, Response, jsonify, render_template, request
 from ai.claude_client import call_claude
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import solo_admin
 
 gastos_bp = Blueprint("gastos", __name__)
 _log = get_logger()
@@ -165,6 +166,7 @@ def _calcular_alertas(db) -> list[dict]:
 # ── Página principal ──────────────────────────────────────────
 
 @gastos_bp.route("/gastos")
+@solo_admin
 def index():
     hoy         = date.today().isoformat()
     fecha_desde = request.args.get("desde", "")
@@ -232,6 +234,7 @@ def index():
 # ── API: registrar ────────────────────────────────────────────
 
 @gastos_bp.route("/gastos/registrar", methods=["POST"])
+@solo_admin
 def registrar():
     data            = request.get_json(silent=True) or {}
     fecha           = data.get("fecha") or date.today().isoformat()
@@ -316,6 +319,7 @@ def registrar():
 # ── API: registrar con desglose Sam's ────────────────────────
 
 @gastos_bp.route("/gastos/registrar_con_desglose", methods=["POST"])
+@solo_admin
 def registrar_con_desglose():
     data            = request.get_json(silent=True) or {}
     gasto           = data.get("gasto") or {}
@@ -441,6 +445,7 @@ def registrar_con_desglose():
 # ── API: subir foto de recibo ─────────────────────────────────
 
 @gastos_bp.route("/gastos/recibos/subir", methods=["POST"])
+@solo_admin
 def subir_recibo():
     if "imagen" not in request.files:
         return jsonify({"ok": False, "error": "No se recibió ninguna imagen"}), 400
@@ -508,6 +513,7 @@ def subir_recibo():
 # ── API: analizar recibo con Claude ──────────────────────────
 
 @gastos_bp.route("/gastos/recibos/<int:recibo_id>/analizar", methods=["POST"])
+@solo_admin
 def analizar_recibo(recibo_id):
     with _db() as db:
         recibo = db.execute(
@@ -692,6 +698,7 @@ def analizar_recibo(recibo_id):
 # ── API: editar ───────────────────────────────────────────────
 
 @gastos_bp.route("/gastos/<int:gasto_id>", methods=["PUT"])
+@solo_admin
 def editar(gasto_id):
     data        = request.get_json(silent=True) or {}
     fecha       = (data.get("fecha") or "").strip()
@@ -727,6 +734,7 @@ def editar(gasto_id):
 # ── API: eliminar ─────────────────────────────────────────────
 
 @gastos_bp.route("/gastos/<int:gasto_id>", methods=["DELETE"])
+@solo_admin
 def eliminar(gasto_id):
     with _db() as db:
         registro = db.execute(
@@ -756,6 +764,7 @@ def eliminar(gasto_id):
 # ── Exportar CSV ──────────────────────────────────────────────
 
 @gastos_bp.route("/gastos/exportar")
+@solo_admin
 def exportar():
     with _db() as db:
         rows = db.execute("SELECT * FROM gastos_extras ORDER BY fecha DESC").fetchall()

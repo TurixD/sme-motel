@@ -22,6 +22,7 @@ from ai.cost_calculator import calcular_costo
 from ai.tools import TOOLS
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import solo_admin
 
 asistente_bp = Blueprint("asistente", __name__)
 _log = get_logger()
@@ -323,6 +324,7 @@ def _ejecutar_tool(nombre, inp, sesion_id):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @asistente_bp.route("/asistente")
+@solo_admin
 def asistente_index():
     sesion_id = request.cookies.get("sesion_ia")
     es_nueva = not sesion_id
@@ -344,6 +346,7 @@ def asistente_index():
 
 
 @asistente_bp.route("/asistente/api/mensaje", methods=["POST"])
+@solo_admin
 def api_mensaje():
     data = request.get_json(silent=True) or {}
     mensaje = (data.get("mensaje") or "").strip()
@@ -457,6 +460,7 @@ def api_mensaje():
 
 
 @asistente_bp.route("/asistente/api/ejecutar_cambio/<int:cambio_id>", methods=["POST"])
+@solo_admin
 def api_ejecutar_cambio(cambio_id):
     conn = _db()
     try:
@@ -505,6 +509,7 @@ def api_ejecutar_cambio(cambio_id):
 
 
 @asistente_bp.route("/asistente/api/cancelar_cambio/<int:cambio_id>", methods=["POST"])
+@solo_admin
 def api_cancelar_cambio(cambio_id):
     conn = _db()
     try:
@@ -537,6 +542,7 @@ def api_cancelar_cambio(cambio_id):
 
 
 @asistente_bp.route("/asistente/api/nueva_sesion")
+@solo_admin
 def api_nueva_sesion():
     sesion_id = str(uuid.uuid4())
     resp = make_response(jsonify({"sesion_id": sesion_id}))

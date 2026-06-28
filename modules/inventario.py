@@ -6,10 +6,11 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import date, timedelta
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, redirect, render_template, request
 
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import _get_modo, solo_admin
 
 inventario_bp = Blueprint("inventario", __name__)
 _log = get_logger()
@@ -86,6 +87,8 @@ def _mostrar_boton_conteo() -> bool:
 
 @inventario_bp.route("/inventario")
 def index():
+    if not (_get_modo() or "empleado").startswith("admin_"):
+        return redirect("/inventario/conteo")
     with _db() as conn:
         rows = conn.execute(f"""
             SELECT
@@ -113,6 +116,7 @@ def index():
 # ── CRUD productos ─────────────────────────────────────────────
 
 @inventario_bp.route("/inventario/productos", methods=["POST"])
+@solo_admin
 def crear_producto():
     data = request.get_json(force=True)
     nombre = (data.get("nombre") or "").strip()
@@ -148,6 +152,7 @@ def crear_producto():
 
 
 @inventario_bp.route("/inventario/productos/<int:pid>", methods=["PUT"])
+@solo_admin
 def editar_producto(pid: int):
     data = request.get_json(force=True)
     nombre = (data.get("nombre") or "").strip()
@@ -183,6 +188,7 @@ def editar_producto(pid: int):
 
 
 @inventario_bp.route("/inventario/productos/<int:pid>", methods=["DELETE"])
+@solo_admin
 def eliminar_producto(pid: int):
     accion = request.args.get("accion", "eliminar")  # eliminar | desactivar
 
@@ -219,6 +225,7 @@ def eliminar_producto(pid: int):
 # ── Historial de movimientos ───────────────────────────────────
 
 @inventario_bp.route("/inventario/productos/<int:pid>/movimientos")
+@solo_admin
 def historial_movimientos(pid: int):
     offset = max(0, int(request.args.get("offset", 0)))
 
@@ -360,6 +367,7 @@ def guardar_conteo():
 # ── API matches aprendidos (Sub-fase 5C) ──────────────────────
 
 @inventario_bp.route("/inventario/api/matches")
+@solo_admin
 def api_matches():
     with _db() as conn:
         rows = conn.execute("""
@@ -374,6 +382,7 @@ def api_matches():
 
 
 @inventario_bp.route("/inventario/api/matches/<int:mid>", methods=["PUT"])
+@solo_admin
 def actualizar_match(mid: int):
     data = request.get_json(force=True)
     try:
@@ -405,6 +414,7 @@ def actualizar_match(mid: int):
 
 
 @inventario_bp.route("/inventario/api/matches/<int:mid>", methods=["DELETE"])
+@solo_admin
 def borrar_match(mid: int):
     with _db() as conn:
         match = conn.execute(

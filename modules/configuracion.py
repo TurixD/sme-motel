@@ -14,6 +14,7 @@ from datetime import date
 
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import solo_admin
 
 configuracion_bp = Blueprint("configuracion", __name__)
 _log = get_logger()
@@ -103,6 +104,7 @@ def _validar(valor: str, tipo: str, vmin, vmax) -> str | None:
 # ── Página principal ──────────────────────────────────────────
 
 @configuracion_bp.route("/configuracion")
+@solo_admin
 def index():
     with _db() as db:
         config = {
@@ -142,6 +144,7 @@ def index():
 # ── API: actualizar configuracion ─────────────────────────────
 
 @configuracion_bp.route("/configuracion/api/config", methods=["POST"])
+@solo_admin
 def api_config():
     data  = request.get_json(silent=True) or {}
     clave = (data.get("clave") or "").strip()
@@ -168,6 +171,7 @@ def api_config():
 # ── API: actualizar gasto fijo ─────────────────────────────────
 
 @configuracion_bp.route("/configuracion/api/gasto-fijo/<int:gf_id>", methods=["POST"])
+@solo_admin
 def api_gasto_fijo(gf_id):
     data     = request.get_json(silent=True) or {}
     monto_s  = str(data.get("monto_estimado") or "").strip()
@@ -211,6 +215,7 @@ def api_gasto_fijo(gf_id):
 # ── API: ejecutar backup manual ────────────────────────────────
 
 @configuracion_bp.route("/configuracion/api/backup", methods=["POST"])
+@solo_admin
 def api_backup():
     if not _BACKUP_SCRIPT.exists():
         return jsonify({"ok": False, "error": "Script de backup no encontrado"}), 500

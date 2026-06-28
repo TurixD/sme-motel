@@ -16,6 +16,7 @@ from flask import Blueprint, Response, jsonify, render_template, request
 from ai.claude_client import call_claude
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import solo_admin
 
 reportes_bp = Blueprint("reportes", __name__)
 _log = get_logger()
@@ -190,6 +191,7 @@ def _payload(db, desde: str, hasta: str, prev_desde: str, prev_hasta: str,
 # ── Página principal ──────────────────────────────────────────
 
 @reportes_bp.route("/reportes")
+@solo_admin
 def index():
     return render_template("reportes.html")
 
@@ -197,6 +199,7 @@ def index():
 # ── API: semanal ──────────────────────────────────────────────
 
 @reportes_bp.route("/reportes/api/semanal")
+@solo_admin
 def api_semanal():
     param = request.args.get("lunes", "")
     try:
@@ -228,6 +231,7 @@ def api_semanal():
 # ── API: mensual ──────────────────────────────────────────────
 
 @reportes_bp.route("/reportes/api/mensual")
+@solo_admin
 def api_mensual():
     param = request.args.get("mes", "")
     try:
@@ -260,6 +264,7 @@ def api_mensual():
 # ── API: anual (solo 4 tarjetas sin comparación) ──────────────
 
 @reportes_bp.route("/reportes/api/anual")
+@solo_admin
 def api_anual():
     try:
         anio = int(request.args.get("anio", ""))
@@ -370,6 +375,7 @@ def _construir_prompt(tipo: str, label: str, tarjetas: dict,
 
 
 @reportes_bp.route("/reportes/api/narrativa/<tipo>/<periodo_clave>", methods=["GET", "POST"])
+@solo_admin
 def api_narrativa(tipo, periodo_clave):
     if tipo not in ("semanal", "mensual"):
         return jsonify({"ok": False, "error": "tipo invalido"}), 400
@@ -492,6 +498,7 @@ def api_narrativa(tipo, periodo_clave):
 # ── Exportar CSV ──────────────────────────────────────────────
 
 @reportes_bp.route("/reportes/exportar")
+@solo_admin
 def exportar():
     tipo = request.args.get("tipo", "semanal")
 

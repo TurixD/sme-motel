@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import solo_admin
 
 fondos_bp = Blueprint("fondos", __name__)
 _log = get_logger()
@@ -94,6 +95,7 @@ def _fmt(n: float) -> str:
 # ── Página principal ──────────────────────────────────────────
 
 @fondos_bp.route("/fondos")
+@solo_admin
 def index():
     lunes   = _lunes_actual()
     domingo = lunes + timedelta(days=6)
@@ -183,6 +185,7 @@ def index():
 # ── API: saldo en tiempo real ─────────────────────────────────
 
 @fondos_bp.route("/fondos/<int:fondo_id>/saldo")
+@solo_admin
 def api_saldo(fondo_id):
     with _db() as db:
         fondo = db.execute(
@@ -197,6 +200,7 @@ def api_saldo(fondo_id):
 # ── API: movimientos de un fondo (para carga dinámica) ───────
 
 @fondos_bp.route("/fondos/<int:fondo_id>/movimientos")
+@solo_admin
 def api_movimientos(fondo_id):
     with _db() as db:
         movs = [
@@ -215,6 +219,7 @@ def api_movimientos(fondo_id):
 # ── API: depósito manual ──────────────────────────────────────
 
 @fondos_bp.route("/fondos/<int:fondo_id>/depositar", methods=["POST"])
+@solo_admin
 def depositar(fondo_id):
     data     = request.get_json(silent=True) or {}
     monto    = float(data.get("monto") or 0)
@@ -246,6 +251,7 @@ def depositar(fondo_id):
 # ── API: retiro manual ────────────────────────────────────────
 
 @fondos_bp.route("/fondos/<int:fondo_id>/retirar", methods=["POST"])
+@solo_admin
 def retirar(fondo_id):
     data     = request.get_json(silent=True) or {}
     monto    = float(data.get("monto") or 0)
@@ -277,6 +283,7 @@ def retirar(fondo_id):
 # ── API: aporte semanal ───────────────────────────────────────
 
 @fondos_bp.route("/fondos/api/aporte", methods=["POST"])
+@solo_admin
 def api_aporte():
     data     = request.get_json(silent=True) or {}
     fondo_id = data.get("fondo_id")
@@ -326,6 +333,7 @@ def api_aporte():
 # ── API: vincular gasto ya registrado a un fondo ──────────────
 
 @fondos_bp.route("/fondos/api/descontar-gasto", methods=["POST"])
+@solo_admin
 def api_descontar_gasto():
     data     = request.get_json(silent=True) or {}
     gasto_id = data.get("gasto_id")

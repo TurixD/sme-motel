@@ -10,11 +10,12 @@ import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 from werkzeug.security import check_password_hash
 
 from config import Config
 from logger import get_logger, log_action, setup_logging
+from modules.auth import solo_admin
 from modules.asistente import asistente_bp
 from modules.configuracion import configuracion_bp
 from modules.cuartos import cuartos_bp
@@ -391,7 +392,11 @@ def _obtener_clima() -> dict:
 
 
 def _gerty_context() -> dict:
-    """Computa el estado de GERTY para inyectarlo en todos los templates."""
+    """Computa el estado de GERTY. En modo empleado siempre devuelve default."""
+    modo = get_modo_actual() or "empleado"
+    if not modo.startswith("admin_"):
+        return {"estado": "default", "contexto": {}}
+
     hora = datetime.now().hour
     try:
         with sqlite3.connect(Config.DB_PATH) as conn:
@@ -520,6 +525,8 @@ def create_app() -> Flask:
 
     @app.route("/")
     def index():
+        if not (get_modo_actual() or "empleado").startswith("admin_"):
+            return redirect("/cuartos")
         data = _dash_data(Config.DB_PATH)
         log_action("Visita al dashboard (/)")
         return render_template("dashboard.html", **data)
@@ -560,6 +567,7 @@ def create_app() -> Flask:
         return jsonify(_gerty_context())
 
     @app.route("/dashboard/api/marcar-pagada", methods=["POST"])
+    @solo_admin
     def marcar_pagada():
         data  = request.get_json(silent=True) or {}
         gf_id = data.get("gasto_fijo_id")

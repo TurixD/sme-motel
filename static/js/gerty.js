@@ -151,7 +151,7 @@
         }, 2000);
     }
 
-    /* ── Click: redirigir a /asistente (simple), easter egg (doble) ── */
+    /* ── Click: redirigir a /asistente (admin) o chiveado breve (empleado), easter egg (doble) ── */
     var singleTimer = null;
     svg.addEventListener('dblclick', function (e) {
         e.preventDefault();
@@ -167,7 +167,12 @@
         singleTimer = setTimeout(function () {
             if (easterActive) {
                 if (currentState === 'enojado') activarChiveado();
-                return; // cancela navegación durante easter egg
+                return;
+            }
+            var esAdmin = (window.MODO_ACTUAL || '').indexOf('admin_') === 0;
+            if (!esAdmin) {
+                activarChiveadoDirecto();
+                return;
             }
             if (!window.location.pathname.startsWith('/asistente')) {
                 window.location.href = '/asistente';

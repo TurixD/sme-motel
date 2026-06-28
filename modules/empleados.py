@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import solo_admin
 
 empleados_bp = Blueprint("empleados", __name__)
 _log = get_logger()
@@ -52,6 +53,7 @@ def _bitacora(conn, fecha_afectada: str, descripcion: str) -> None:
 # ── Página principal ──────────────────────────────────────────
 
 @empleados_bp.route("/empleados")
+@solo_admin
 def index():
     semana_param = request.args.get("semana", "")
     try:
@@ -149,6 +151,7 @@ def index():
 # ── API: alta ─────────────────────────────────────────────────
 
 @empleados_bp.route("/empleados/alta", methods=["POST"])
+@solo_admin
 def alta():
     data          = request.get_json(silent=True) or {}
     nombre        = (data.get("nombre") or "").strip()
@@ -180,6 +183,7 @@ def alta():
 # ── API: editar ───────────────────────────────────────────────
 
 @empleados_bp.route("/empleados/<int:emp_id>", methods=["PUT"])
+@solo_admin
 def editar(emp_id):
     data          = request.get_json(silent=True) or {}
     nombre        = (data.get("nombre") or "").strip()
@@ -213,6 +217,7 @@ def editar(emp_id):
 # ── API: baja ─────────────────────────────────────────────────
 
 @empleados_bp.route("/empleados/<int:emp_id>/baja", methods=["POST"])
+@solo_admin
 def baja(emp_id):
     hoy = date.today().isoformat()
 
@@ -241,6 +246,7 @@ def baja(emp_id):
 # ── API: agregar asignación de turno (siempre INSERT) ─────────
 
 @empleados_bp.route("/empleados/asignar", methods=["POST"])
+@solo_admin
 def asignar():
     data     = request.get_json(silent=True) or {}
     fecha    = (data.get("fecha") or "").strip()
@@ -300,6 +306,7 @@ def asignar():
 # ── API: quitar asignación específica ────────────────────────
 
 @empleados_bp.route("/empleados/asignar/<int:asig_id>", methods=["DELETE"])
+@solo_admin
 def quitar_asignacion(asig_id):
     with _db() as db:
         asig = db.execute(
@@ -327,6 +334,7 @@ def quitar_asignacion(asig_id):
 # ── API: toggle pagado en nómina ──────────────────────────────
 
 @empleados_bp.route("/empleados/nomina/pago", methods=["POST"])
+@solo_admin
 def nomina_pago():
     data    = request.get_json(silent=True) or {}
     asig_id = data.get("asig_id")

@@ -12,6 +12,7 @@ from flask import Blueprint, Response, jsonify, render_template, request
 
 from config import Config
 from logger import get_logger, log_action
+from modules.auth import solo_admin
 
 ingresos_bp = Blueprint("ingresos", __name__)
 _log = get_logger()
@@ -36,6 +37,7 @@ def _calcular(efectivo: float, tarjeta: float, transferencia: float) -> tuple[fl
 # ── Página principal ──────────────────────────────────────────
 
 @ingresos_bp.route("/ingresos")
+@solo_admin
 def index():
     hoy         = date.today().isoformat()
     fecha_desde = request.args.get("desde", "")
@@ -86,6 +88,7 @@ def index():
 # ── API: registrar (nuevo / sumar / reemplazar) ───────────────
 
 @ingresos_bp.route("/ingresos/registrar", methods=["POST"])
+@solo_admin
 def registrar():
     data    = request.get_json(silent=True) or {}
     fecha   = data.get("fecha") or date.today().isoformat()
@@ -162,6 +165,7 @@ def registrar():
 # ── API: editar registro del historial ────────────────────────
 
 @ingresos_bp.route("/ingresos/<int:registro_id>", methods=["PUT"])
+@solo_admin
 def editar(registro_id):
     data   = request.get_json(silent=True) or {}
     efect  = float(data.get("monto_efectivo", 0) or 0)
@@ -196,6 +200,7 @@ def editar(registro_id):
 # ── API: eliminar ─────────────────────────────────────────────
 
 @ingresos_bp.route("/ingresos/<int:registro_id>", methods=["DELETE"])
+@solo_admin
 def eliminar(registro_id):
     with _db() as db:
         registro = db.execute(
@@ -217,6 +222,7 @@ def eliminar(registro_id):
 # ── Exportar CSV ──────────────────────────────────────────────
 
 @ingresos_bp.route("/ingresos/exportar")
+@solo_admin
 def exportar():
     with _db() as db:
         rows = db.execute(
