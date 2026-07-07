@@ -29,11 +29,10 @@
         <div class="corte-card__header">
             <h2 class="corte-card__turno">{{ label }}</h2>
             <span class="corte-badge corte-badge--{{ estado }}">
-                {% if   estado == 'pendiente'  %}Sin declarar
-                {% elif estado == 'declarado'  %}Declarado
-                {% elif estado == 'confirmado' %}Confirmado
-                {% elif estado == 'editado'    %}Editado
-                {% elif estado == 'rechazado'  %}Rechazado
+                {% if   estado == 'pendiente' %}Sin declarar
+                {% elif estado == 'declarado' %}Declarado
+                {% elif estado == 'editado'   %}Editado
+                {% elif estado == 'anulado'   %}Anulado
                 {% endif %}
             </span>
         </div>
@@ -48,13 +47,14 @@
             {% if c.notas %}
             <div class="corte-card__notas">{{ c.notas }}</div>
             {% endif %}
-            {% if estado == 'rechazado' and c.motivo_rechazo %}
+            {% if estado == 'anulado' and c.motivo_rechazo %}
             <div class="corte-card__rechazo">Motivo: {{ c.motivo_rechazo }}</div>
             {% endif %}
-            {% if estado in ('confirmado', 'editado') and c.confirmado_por %}
-            <div class="corte-card__confirmado">
-                {{ 'Editado' if estado == 'editado' else 'Confirmado' }} por {{ c.confirmado_por }}
-            </div>
+            {% if estado == 'editado' and c.editado_por %}
+            <div class="corte-card__confirmado">Editado por {{ c.editado_por }}</div>
+            {% endif %}
+            {% if estado == 'anulado' and c.confirmado_por %}
+            <div class="corte-card__confirmado">Anulado por {{ c.confirmado_por }}</div>
             {% endif %}
         </div>
         {% else %}
@@ -64,7 +64,7 @@
         {% endif %}
 
         <div class="corte-card__actions">
-            {% if not c or estado == 'rechazado' %}
+            {% if not c or estado == 'anulado' %}
                 {% set ventana_ok = es_admin or ventanas.get(turno_key, False) %}
                 {% if ventana_ok %}
                 <button class="btn btn--primary btn-declarar"
@@ -80,14 +80,7 @@
                 {% endif %}
             {% endif %}
 
-            {% if c and es_admin and estado in ('declarado', 'editado') %}
-            <button class="btn btn--ghost btn-ver-detalle"
-                    data-corte="{{ c | tojson | forceescape }}">
-                Ver / Confirmar
-            </button>
-            {% endif %}
-
-            {% if c and es_admin and estado == 'confirmado' %}
+            {% if c and es_admin %}
             <button class="btn btn--ghost btn-ver-detalle"
                     data-corte="{{ c | tojson | forceescape }}">
                 Ver detalle
@@ -115,7 +108,7 @@
                 <th>Bruto sistema</th>
                 <th>Bruto declarado</th>
                 <th>Estado</th>
-                <th>Confirmado por</th>
+                <th>Editado/anulado por</th>
             </tr>
         </thead>
         <tbody>
@@ -127,7 +120,7 @@
                 <td class="mono">{{ r.bruto_calculado | moneda }}</td>
                 <td class="mono text-accent">{{ r.bruto_declarado | moneda }}</td>
                 <td><span class="corte-badge corte-badge--{{ r.estado }}">{{ r.estado }}</span></td>
-                <td>{{ r.confirmado_por or '—' }}</td>
+                <td>{{ r.editado_por or r.confirmado_por or '—' }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -197,9 +190,8 @@
             <h3 class="modal-card__title" id="det-titulo">Detalle de corte</h3>
             <dl class="corte-dl" id="det-dl"></dl>
             <div class="modal-card__actions" id="det-actions">
-                <button id="det-btn-rechazar"  class="btn btn--ghost btn--danger" type="button">Rechazar</button>
-                <button id="det-btn-editar"    class="btn btn--ghost" type="button">Editar</button>
-                <button id="det-btn-confirmar" class="btn btn--primary" type="button">Confirmar</button>
+                <button id="det-btn-rechazar" class="btn btn--ghost btn--danger" type="button">Anular</button>
+                <button id="det-btn-editar"   class="btn btn--primary" type="button">Editar</button>
             </div>
             <div class="modal-card__actions" id="det-actions-cerrar" hidden>
                 <button id="det-btn-cerrar" class="btn btn--ghost" type="button">Cerrar</button>
@@ -232,17 +224,17 @@
             </div>
         </div>
 
-        <!-- Modo rechazar -->
+        <!-- Modo anular -->
         <div id="det-rechazar" hidden>
-            <h3 class="modal-card__title">Rechazar corte</h3>
+            <h3 class="modal-card__title">Anular corte</h3>
             <div class="form-group">
-                <label class="form-label">Motivo del rechazo (opcional)</label>
+                <label class="form-label">Motivo de la anulación (opcional)</label>
                 <input id="det-motivo" class="form-input" type="text" placeholder="Explica el problema...">
             </div>
             <div id="det-rechazo-error" class="form-error" hidden></div>
             <div class="modal-card__actions">
                 <button id="det-btn-cancelar-rechazar" class="btn btn--ghost" type="button">Cancelar</button>
-                <button id="det-btn-submit-rechazar"   class="btn btn--primary" type="button">Rechazar</button>
+                <button id="det-btn-submit-rechazar"   class="btn btn--danger" type="button">Anular</button>
             </div>
         </div>
 

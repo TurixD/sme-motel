@@ -27,7 +27,7 @@
     </select>
     <select class="form-select form-select--sm" name="estado">
         <option value="">Todos los estados</option>
-        {% for est in ['declarado', 'confirmado', 'editado', 'rechazado'] %}
+        {% for est in ['declarado', 'editado', 'anulado'] %}
         <option value="{{ est }}" {{ 'selected' if filtro_estado == est }}>{{ est | capitalize }}</option>
         {% endfor %}
     </select>
@@ -45,7 +45,7 @@
             <th>Bruto sistema</th>
             <th>Bruto declarado</th>
             <th>Estado</th>
-            <th>Confirmado por</th>
+            <th>Editado/anulado por</th>
         </tr>
     </thead>
     <tbody>
@@ -57,7 +57,7 @@
             <td class="mono">{{ r.bruto_calculado | moneda }}</td>
             <td class="mono text-accent">{{ r.bruto_declarado | moneda }}</td>
             <td><span class="corte-badge corte-badge--{{ r.estado }}">{{ r.estado }}</span></td>
-            <td>{{ r.confirmado_por or '—' }}</td>
+            <td>{{ r.editado_por or r.confirmado_por or '—' }}</td>
         </tr>
         {% endfor %}
     </tbody>

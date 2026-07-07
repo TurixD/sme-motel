@@ -245,7 +245,7 @@
     var corteActual = null;
 
     var LABEL_TURNO  = { manana: 'Mañana', tarde: 'Tarde', noche: 'Noche' };
-    var LABEL_ESTADO = { declarado: 'Declarado', confirmado: 'Confirmado', editado: 'Editado', rechazado: 'Rechazado' };
+    var LABEL_ESTADO = { declarado: 'Declarado', editado: 'Editado', anulado: 'Anulado' };
 
     function renderDl(c) {
         var filas = [
@@ -257,8 +257,9 @@
             ['Estado',          LABEL_ESTADO[c.estado] || c.estado,      false],
         ];
         if (c.notas)          filas.push(['Notas',          c.notas,          false]);
-        if (c.confirmado_por) filas.push(['Confirmado por', c.confirmado_por, false]);
-        if (c.motivo_rechazo) filas.push(['Motivo rechazo', c.motivo_rechazo, false]);
+        if (c.editado_por)    filas.push(['Editado por',    c.editado_por,    false]);
+        if (c.estado === 'anulado' && c.confirmado_por) filas.push(['Anulado por', c.confirmado_por, false]);
+        if (c.motivo_rechazo) filas.push(['Motivo anulación', c.motivo_rechazo, false]);
 
         detDl.innerHTML = filas.map(function (f) {
             return '<dt>' + f[0] + '</dt><dd class="' + (f[2] ? '' : 'dd--text') + '">' + f[1] + '</dd>';
@@ -295,33 +296,7 @@
     if (detBtnCerrar) detBtnCerrar.addEventListener('click', function () { modalDet.hidden = true; });
     if (modalDet) modalDet.addEventListener('click', function (e) { if (e.target === modalDet) modalDet.hidden = true; });
 
-    // Confirmar
-    var btnConfirmar = document.getElementById('det-btn-confirmar');
-    if (btnConfirmar) {
-        btnConfirmar.addEventListener('click', function () {
-            if (!corteActual) return;
-            btnConfirmar.disabled    = true;
-            btnConfirmar.textContent = 'Confirmando...';
-            postJSON('/cortes/api/confirmar/' + corteActual.id, {})
-                .then(function (d) {
-                    if (d.ok) {
-                        if (d.ingresos_warning) alert('Corte confirmado.\nAviso: ' + d.ingresos_warning);
-                        location.reload();
-                    } else {
-                        alert(d.error || 'Error al confirmar');
-                        btnConfirmar.disabled    = false;
-                        btnConfirmar.textContent = 'Confirmar';
-                    }
-                })
-                .catch(function () {
-                    alert('Error de red.');
-                    btnConfirmar.disabled    = false;
-                    btnConfirmar.textContent = 'Confirmar';
-                });
-        });
-    }
-
-    // Rechazar
+    // Anular
     var btnRechazar = document.getElementById('det-btn-rechazar');
     if (btnRechazar) {
         btnRechazar.addEventListener('click', function () {
@@ -340,7 +315,7 @@
             if (!corteActual) return;
             hideError(detRecErr);
             btnSubmitRechazar.disabled = true;
-            postJSON('/cortes/api/rechazar/' + corteActual.id, { motivo: detMotivo.value.trim() })
+            postJSON('/cortes/api/anular/' + corteActual.id, { motivo: detMotivo.value.trim() })
                 .then(function (d) {
                     if (d.ok) { location.reload(); }
                     else { showError(detRecErr, d.error || 'Error'); btnSubmitRechazar.disabled = false; }

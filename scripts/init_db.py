@@ -68,6 +68,50 @@ _CUARTOS_SEED = [
 ]
 
 
+def _recalcular_ingresos_diarios(conn, fecha: str) -> None:
+    """
+    Recalcula ingresos_diarios para una fecha sumando cortes_turno válidos
+    (estado 'declarado' o 'editado'). Solo actualiza si ya existen los 3
+    turnos del día para esa fecha. Espejo de _actualizar_ingresos_diarios
+    en modules/cortes.py, duplicado aquí para no acoplar init_db.py al
+    paquete de la app.
+    """
+    turnos_presentes = conn.execute(
+        "SELECT COUNT(DISTINCT turno) FROM cortes_turno WHERE fecha = ?", (fecha,)
+    ).fetchone()[0]
+    if turnos_presentes < 3:
+        print(f"  ingresos_diarios: {fecha} no tiene los 3 turnos, no se recalcula")
+        return
+
+    bruto_total = float(conn.execute(
+        """SELECT COALESCE(SUM(bruto_declarado), 0) FROM cortes_turno
+           WHERE fecha = ? AND estado IN ('declarado', 'editado')""",
+        (fecha,),
+    ).fetchone()[0])
+    notas_sync = "Generado desde cortes de turno v2.3"
+
+    existente = conn.execute(
+        "SELECT id FROM ingresos_diarios WHERE fecha = ?", (fecha,)
+    ).fetchone()
+    if existente:
+        conn.execute(
+            """UPDATE ingresos_diarios
+               SET monto_efectivo=?, monto_tarjeta=0, monto_transferencia=0,
+                   comision_tarjeta=0, total_neto=?, notas=?
+               WHERE fecha=?""",
+            (bruto_total, bruto_total, notas_sync, fecha),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO ingresos_diarios
+               (fecha, monto_efectivo, monto_tarjeta, monto_transferencia,
+                comision_tarjeta, total_neto, notas, creado_en)
+               VALUES (?, ?, 0, 0, 0, ?, ?, datetime('now','localtime'))""",
+            (fecha, bruto_total, bruto_total, notas_sync),
+        )
+    print(f"  ingresos_diarios: recalculado para {fecha} = {bruto_total:.2f}")
+
+
 def _seed_cuartos(conn) -> None:
     conn.executemany(
         "INSERT OR IGNORE INTO cuartos "
@@ -361,6 +405,30 @@ def migrar() -> None:
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes_turno(fecha)")
                     migraciones += 1
                     print("  cortes_turno: recreada con schema simplificado (v2.3b)")
+
+        # v2.3c — eliminar estado 'confirmado' (ya no existe en el flujo nuevo)
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "cortes_turno" in tablas:
+            fechas_afectadas = {
+                r[0] for r in conn.execute(
+                    "SELECT DISTINCT fecha FROM cortes_turno WHERE estado = 'confirmado'"
+                ).fetchall()
+            }
+            if fechas_afectadas:
+                conn.execute(
+                    "UPDATE cortes_turno SET estado = 'declarado' WHERE estado = 'confirmado'"
+                )
+                migraciones += 1
+                print(f"  cortes_turno: {len(fechas_afectadas)} fecha(s) con estado "
+                      f"'confirmado' migradas a 'declarado' (v2.3c)")
+
+                # '2026-07-06' son datos de prueba: se excluyen del recálculo automático
+                # de ingresos_diarios (se van a borrar manualmente).
+                fechas_afectadas.discard("2026-07-06")
+                for fecha in sorted(fechas_afectadas):
+                    _recalcular_ingresos_diarios(conn, fecha)
 
         conn.commit()
         if migraciones == 0:

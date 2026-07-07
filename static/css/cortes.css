@@ -41,10 +41,9 @@
     transition: border-color var(--transition-hover);
 }
 
-.corte-card--declarado  { border-color: var(--status-warning); }
-.corte-card--confirmado { border-color: var(--status-success); }
+.corte-card--declarado { border-color: var(--status-warning); }
 .corte-card--editado    { border-color: var(--status-info); }
-.corte-card--rechazado  { border-color: var(--status-error); }
+.corte-card--anulado    { border-color: var(--status-error); }
 
 .corte-card__header {
     display: flex;
@@ -83,6 +82,11 @@
     font-size: var(--text-2xl);
     font-weight: 600;
     color: var(--text-primary);
+}
+
+.corte-card--anulado .corte-card__monto {
+    color: var(--status-error);
+    text-decoration: line-through;
 }
 
 .corte-card__meta {
@@ -135,25 +139,22 @@
     color: var(--text-tertiary);
 }
 
-.corte-badge--pendiente  {
+.corte-badge--pendiente {
     background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
     color: var(--text-tertiary);
 }
-.corte-badge--declarado  {
+.corte-badge--declarado {
     background: color-mix(in srgb, var(--status-warning) 15%, transparent);
     color: var(--status-warning);
 }
-.corte-badge--confirmado {
-    background: color-mix(in srgb, var(--status-success) 15%, transparent);
-    color: var(--status-success);
-}
-.corte-badge--editado    {
+.corte-badge--editado {
     background: color-mix(in srgb, var(--status-info) 15%, transparent);
     color: var(--status-info);
 }
-.corte-badge--rechazado  {
+.corte-badge--anulado {
     background: color-mix(in srgb, var(--status-error) 15%, transparent);
     color: var(--status-error);
+    text-decoration: line-through;
 }
 
 /* ── Histórico ──────────────────────────────────────────────── */

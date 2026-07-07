@@ -1,9 +1,10 @@
 """
 cortes.py - Módulo de cortes de turno (v2.3).
 
-Flujo simplificado: empleado registra bruto en caja → admin confirma.
+Flujo simplificado: empleado declara bruto en caja y cuenta de inmediato para
+ingresos_diarios. Admin puede editar (corrige) o anular (invalida) después,
+en cualquier momento. No hay paso de "confirmar".
 Sueldos se manejan por separado (lógica semanal automática de v1).
-Corte noche al confirmar sincroniza ingresos_diarios si los 3 están confirmados.
 """
 
 import sqlite3
@@ -73,28 +74,29 @@ def _calcular_bruto(conn, turno: str, fecha: str) -> dict:
     return {"bruto": float(row["bruto"]), "count_rentas": int(row["cnt"])}
 
 
-def _sincronizar_ingresos(conn, fecha: str, confirmado_por: str) -> dict:
+def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
     """
-    Al confirmar corte noche: suma brutos de los 3 cortes confirmados/editados
-    y crea/actualiza ingresos_diarios. El total se registra íntegro como efectivo.
+    Recalcula ingresos_diarios para una fecha sumando los cortes válidos
+    (estado 'declarado' o 'editado'; los 'anulado' no cuentan).
+
+    Solo genera/actualiza el registro si ya existen los 3 turnos del día
+    (sin importar su estado individual) — evita crear un total parcial
+    mientras faltan turnos por declarar. Es indiferente al orden en que se
+    declaren los turnos y se recalcula en cada declaración/edición/anulación.
     """
-    cortes = conn.execute(
-        "SELECT turno, bruto_declarado, estado FROM cortes_turno WHERE fecha = ?",
+    turnos_presentes = conn.execute(
+        "SELECT COUNT(DISTINCT turno) FROM cortes_turno WHERE fecha = ?", (fecha,)
+    ).fetchone()[0]
+    if turnos_presentes < 3:
+        return {"ok": False, "warning": "Faltan turnos por declarar"}
+
+    bruto_total = conn.execute(
+        """SELECT COALESCE(SUM(bruto_declarado), 0) FROM cortes_turno
+           WHERE fecha = ? AND estado IN ('declarado', 'editado')""",
         (fecha,),
-    ).fetchall()
-    mapa = {c["turno"]: c for c in cortes}
-
-    pendientes = []
-    for t in ("manana", "tarde"):
-        c = mapa.get(t)
-        if not c or c["estado"] not in ("confirmado", "editado"):
-            pendientes.append(_TURNO_LABELS.get(t, t))
-
-    if pendientes:
-        return {"ok": False, "warning": f"Cortes sin confirmar: {', '.join(pendientes)}"}
-
-    bruto_total = sum(float(c["bruto_declarado"]) for c in mapa.values())
-    notas_sync  = f"Generado desde cortes de turno v2.3 — confirmado por {confirmado_por}"
+    ).fetchone()[0]
+    bruto_total = float(bruto_total)
+    notas_sync  = "Generado desde cortes de turno v2.3"
 
     existente = conn.execute(
         "SELECT id FROM ingresos_diarios WHERE fecha = ?", (fecha,)
@@ -107,7 +109,7 @@ def _sincronizar_ingresos(conn, fecha: str, confirmado_por: str) -> dict:
                WHERE fecha=?""",
             (bruto_total, bruto_total, notas_sync, fecha),
         )
-        log_action("ingresos_diarios ACTUALIZADO vía corte noche: fecha=%s bruto=%.2f", fecha, bruto_total)
+        log_action("ingresos_diarios ACTUALIZADO vía cortes de turno: fecha=%s bruto=%.2f", fecha, bruto_total)
     else:
         conn.execute(
             """INSERT INTO ingresos_diarios
@@ -116,7 +118,7 @@ def _sincronizar_ingresos(conn, fecha: str, confirmado_por: str) -> dict:
                VALUES (?, ?, 0, 0, 0, ?, ?, datetime('now','localtime'))""",
             (fecha, bruto_total, bruto_total, notas_sync),
         )
-        log_action("ingresos_diarios CREADO vía corte noche: fecha=%s bruto=%.2f", fecha, bruto_total)
+        log_action("ingresos_diarios CREADO vía cortes de turno: fecha=%s bruto=%.2f", fecha, bruto_total)
 
     return {"ok": True, "bruto_total": bruto_total}
 
@@ -272,8 +274,9 @@ def api_declarar():
                    VALUES (?,?,?,?,?,'declarado',?,?)""",
                 (fecha, turno, int(empleado_id), bruto_calc, bruto_declarado, ahora, notas),
             )
-            conn.commit()
             corte_id = cur.lastrowid
+            _actualizar_ingresos_diarios(conn, fecha)
+            conn.commit()
         except Exception as exc:
             if "UNIQUE" in str(exc):
                 return jsonify({"ok": False, "error": f"Ya existe un corte de {_TURNO_LABELS[turno]} para esta fecha"}), 409
@@ -284,46 +287,6 @@ def api_declarar():
         corte_id, turno, fecha, int(empleado_id), bruto_declarado,
     )
     return jsonify({"ok": True, "corte_id": corte_id})
-
-
-# ── API: confirmar corte (admin) ──────────────────────────────
-
-@cortes_bp.route("/cortes/api/confirmar/<int:corte_id>", methods=["POST"])
-@solo_admin
-def api_confirmar(corte_id):
-    modo  = _get_modo()
-    ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    with _db() as conn:
-        corte = conn.execute(
-            "SELECT * FROM cortes_turno WHERE id=?", (corte_id,)
-        ).fetchone()
-        if not corte:
-            return jsonify({"ok": False, "error": "Corte no encontrado"}), 404
-        if corte["estado"] == "confirmado":
-            return jsonify({"ok": False, "error": "Ya está confirmado"}), 409
-
-        conn.execute(
-            "UPDATE cortes_turno SET estado='confirmado', confirmado_por=?, confirmado_at=? WHERE id=?",
-            (modo, ahora, corte_id),
-        )
-
-        sync = None
-        if corte["turno"] == "noche":
-            sync = _sincronizar_ingresos(conn, corte["fecha"], modo)
-
-        conn.commit()
-
-    log_action("Corte CONFIRMADO id=%d turno=%s fecha=%s por=%s", corte_id, corte["turno"], corte["fecha"], modo)
-
-    resp = {"ok": True}
-    if sync:
-        if sync.get("ok"):
-            resp["ingresos_sincronizados"] = True
-            resp["bruto_total"] = sync["bruto_total"]
-        else:
-            resp["ingresos_warning"] = sync.get("warning")
-    return jsonify(resp)
 
 
 # ── API: editar corte (admin) ─────────────────────────────────
@@ -357,6 +320,7 @@ def api_editar(corte_id):
                WHERE id=?""",
             (int(empleado_id), bruto_declarado, notas, modo, ahora, corte_id),
         )
+        _actualizar_ingresos_diarios(conn, corte["fecha"])
         conn.commit()
 
     log_action("Corte EDITADO id=%d turno=%s fecha=%s por=%s bruto=%.2f",
@@ -364,11 +328,11 @@ def api_editar(corte_id):
     return jsonify({"ok": True})
 
 
-# ── API: rechazar corte (admin) ───────────────────────────────
+# ── API: anular corte (admin) ─────────────────────────────────
 
-@cortes_bp.route("/cortes/api/rechazar/<int:corte_id>", methods=["POST"])
+@cortes_bp.route("/cortes/api/anular/<int:corte_id>", methods=["POST"])
 @solo_admin
-def api_rechazar(corte_id):
+def api_anular(corte_id):
     data   = request.get_json(silent=True) or {}
     motivo = (data.get("motivo") or "").strip() or None
     modo   = _get_modo()
@@ -383,13 +347,14 @@ def api_rechazar(corte_id):
 
         conn.execute(
             """UPDATE cortes_turno
-               SET estado='rechazado', motivo_rechazo=?, confirmado_por=?, confirmado_at=?
+               SET estado='anulado', motivo_rechazo=?, confirmado_por=?, confirmado_at=?
                WHERE id=?""",
             (motivo, modo, ahora, corte_id),
         )
+        _actualizar_ingresos_diarios(conn, corte["fecha"])
         conn.commit()
 
-    log_action("Corte RECHAZADO id=%d turno=%s fecha=%s por=%s motivo=%s",
+    log_action("Corte ANULADO id=%d turno=%s fecha=%s por=%s motivo=%s",
                corte_id, corte["turno"], corte["fecha"], modo, motivo or "(sin motivo)")
     return jsonify({"ok": True})
 
