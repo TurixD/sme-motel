@@ -9,108 +9,43 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <style>
-        body {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: var(--bg-primary);
-            padding: var(--space-6);
-        }
-        .login-brand {
-            font-size: var(--text-2xl);
-            font-weight: 700;
-            letter-spacing: 0.02em;
-            color: var(--text-primary);
-            margin-bottom: var(--space-2);
-        }
-        .login-brand span { color: var(--accent-ai); }
-        .login-subtitle {
-            font-size: var(--text-sm);
-            color: var(--text-tertiary);
-            margin-bottom: var(--space-8);
-        }
-        .login-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-8);
-            width: 100%;
-            max-width: 360px;
-        }
-        .login-card__title {
-            font-size: var(--text-base);
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: var(--space-6);
-        }
-        .form-field {
-            margin-bottom: var(--space-4);
-        }
-        .form-field label {
-            display: block;
-            font-size: var(--text-sm);
-            color: var(--text-secondary);
-            margin-bottom: var(--space-2);
-        }
-        .form-field input {
-            width: 100%;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            padding: var(--space-3) var(--space-4);
-            font-size: var(--text-sm);
-            color: var(--text-primary);
-            font-family: var(--font-sans);
-            box-sizing: border-box;
-            transition: border-color var(--transition-hover);
-        }
-        .form-field input:focus {
-            outline: none;
-            border-color: var(--accent-ai);
-        }
-        .login-error {
-            display: flex;
-            align-items: center;
-            gap: var(--space-2);
-            background: color-mix(in srgb, var(--status-error) 12%, transparent);
-            border: 1px solid color-mix(in srgb, var(--status-error) 30%, transparent);
-            border-radius: var(--radius-md);
-            padding: var(--space-3) var(--space-4);
-            font-size: var(--text-sm);
-            color: var(--status-error);
-            margin-bottom: var(--space-4);
-        }
-        .login-submit {
-            width: 100%;
-            margin-top: var(--space-6);
-            padding: var(--space-3) var(--space-4);
-            background: var(--accent-ai);
-            color: var(--bg-primary);
-            border: none;
-            border-radius: var(--radius-md);
-            font-size: var(--text-sm);
-            font-weight: 600;
-            font-family: var(--font-sans);
-            cursor: pointer;
-            transition: opacity var(--transition-hover);
-        }
-        .login-submit:hover { opacity: 0.88; }
-        .login-firma {
-            margin-top: var(--space-8);
-            font-size: 11px;
-            color: var(--text-tertiary);
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 </head>
 <body>
     <div class="login-brand">S<span>M</span>E</div>
     <p class="login-subtitle">Motel Hacienda Del Sauz</p>
 
-    <div class="login-card">
-        <p class="login-card__title">Iniciar sesión como admin</p>
+    <!-- PASO 1: grilla de perfiles -->
+    <section id="step-profiles" class="login-step">
+        <h1 class="login-question">¿Quién está usando SME?</h1>
+
+        <div class="profile-grid">
+            {% for u in usuarios %}
+            <div class="profile-card"
+                 tabindex="0"
+                 role="button"
+                 aria-label="Entrar como {{ u.nombre_display }}"
+                 data-username="{{ u.username }}"
+                 data-index="{{ loop.index0 }}"
+                 onclick="seleccionarPerfil(this)"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();seleccionarPerfil(this)}">
+                <div class="profile-avatar profile-avatar--md" data-user="{{ u.username }}" data-color-index="{{ loop.index0 }}">
+                    {{ u.nombre_display[0]|upper }}
+                </div>
+                <span class="profile-name">{{ u.nombre_display }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <form method="POST" action="/logout">
+            <button type="submit" class="login-link-btn">← Volver a modo empleado</button>
+        </form>
+    </section>
+
+    <!-- PASO 2: password -->
+    <section id="step-password" class="login-step">
+        <div class="profile-avatar profile-avatar--lg" id="selected-avatar"></div>
+        <p class="selected-name" id="selected-name"></p>
 
         {% if error %}
         <div class="login-error">
@@ -119,34 +54,81 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="/login">
+        <form method="POST" action="/login" id="password-form">
+            <input type="hidden" name="username" id="hidden-username" value="{{ prefill_username or '' }}">
             <div class="form-field">
-                <label for="username">Usuario</label>
-                <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    autocomplete="username"
-                    autocapitalize="none"
-                    spellcheck="false"
-                    required
-                    autofocus
-                >
-            </div>
-            <div class="form-field">
-                <label for="password">Contraseña</label>
                 <input
                     type="password"
-                    id="password"
+                    id="password-input"
                     name="password"
+                    placeholder="Contraseña"
                     autocomplete="current-password"
                     required
                 >
             </div>
             <button class="login-submit" type="submit">Entrar</button>
         </form>
-    </div>
+
+        <button type="button" class="login-link-btn" onclick="volverAPerfiles()">← Cambiar de usuario</button>
+        <form method="POST" action="/logout">
+            <button type="submit" class="login-link-btn">Volver a modo empleado</button>
+        </form>
+    </section>
 
     <p class="login-firma">トゥリ＆ガーティ制作 2026</p>
+
+    <script>
+        const USUARIOS = {{ usuarios|tojson }};
+        const PREFILL_USERNAME = {{ (prefill_username or '')|tojson }};
+
+        function mostrarPaso(paso) {
+            document.getElementById('step-profiles').classList.toggle('active', paso === 1);
+            document.getElementById('step-password').classList.toggle('active', paso === 2);
+            if (paso === 2) {
+                document.getElementById('password-input').focus();
+            }
+        }
+
+        function pintarSeleccion(usuario, colorIndex) {
+            document.getElementById('hidden-username').value = usuario.username;
+            document.getElementById('selected-name').textContent = usuario.nombre_display;
+            const avatar = document.getElementById('selected-avatar');
+            avatar.textContent = usuario.nombre_display[0].toUpperCase();
+            avatar.dataset.user = usuario.username;
+            avatar.dataset.colorIndex = colorIndex;
+        }
+
+        function seleccionarPerfil(card) {
+            const username = card.dataset.username;
+            const colorIndex = card.dataset.index;
+            const usuario = USUARIOS.find(u => u.username === username);
+            if (!usuario) return;
+            pintarSeleccion(usuario, colorIndex);
+            mostrarPaso(2);
+        }
+
+        function volverAPerfiles() {
+            mostrarPaso(1);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('step-password').classList.contains('active')) {
+                volverAPerfiles();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (PREFILL_USERNAME) {
+                const idx = USUARIOS.findIndex(u => u.username === PREFILL_USERNAME);
+                const usuario = USUARIOS[idx];
+                if (usuario) {
+                    pintarSeleccion(usuario, idx);
+                }
+                mostrarPaso(2);
+            } else {
+                mostrarPaso(1);
+            }
+        });
+    </script>
 </body>
 </html>

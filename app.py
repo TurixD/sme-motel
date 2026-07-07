@@ -535,7 +535,18 @@ def create_app() -> Flask:
     def login():
         if request.method == "GET" and get_modo_actual().startswith("admin_"):
             return redirect(url_for("index"))
+
+        with sqlite3.connect(Config.DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            usuarios = [
+                dict(row) for row in conn.execute(
+                    "SELECT id, username, nombre_display FROM usuarios "
+                    "WHERE activo = 1 ORDER BY nombre_display"
+                ).fetchall()
+            ]
+
         error = None
+        prefill_username = None
         if request.method == "POST":
             username = (request.form.get("username") or "").strip().lower()
             password = request.form.get("password") or ""
@@ -554,7 +565,10 @@ def create_app() -> Flask:
             else:
                 log_action("Login fallido: usuario '%s'", username)
                 error = "Usuario o contraseña incorrectos"
-        return render_template("login.html", error=error)
+                prefill_username = username
+        return render_template(
+            "login.html", error=error, usuarios=usuarios, prefill_username=prefill_username
+        )
 
     @app.route("/logout", methods=["POST"])
     def logout():
