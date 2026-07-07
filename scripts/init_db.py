@@ -367,8 +367,17 @@ def migrar() -> None:
             print("Sin cambios: la BD ya está actualizada.")
         else:
             print(f"Migración completada ({migraciones} cambios).")
+
+        count_asignaciones = conn.execute(
+            "SELECT COUNT(*) FROM asignaciones_turnos"
+        ).fetchone()[0]
     finally:
         conn.close()
+
+    if count_asignaciones < 100:
+        print("[MIGRAR] Ejecutando seed de asignaciones de turnos...")
+        from seed_asignaciones import seed as seed_asignaciones
+        seed_asignaciones()
 
 
 if __name__ == "__main__":
