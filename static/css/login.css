@@ -1,0 +1,193 @@
+/* =============================================================
+   login.css - Pantalla de login estilo selector de perfiles
+   ============================================================= */
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    padding: var(--space-6);
+}
+
+.login-brand {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+.login-brand span { color: var(--accent-ai); }
+
+.login-subtitle {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-8);
+}
+
+/* --- Toggle de pasos --- */
+.login-step {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transition: opacity var(--transition-notify);
+}
+.login-step.active {
+    display: flex;
+    opacity: 1;
+}
+
+/* --- Paso 1: grilla de perfiles --- */
+.login-question {
+    font-size: var(--text-xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-8);
+}
+
+.profile-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px;
+    justify-content: center;
+    margin-bottom: var(--space-8);
+}
+
+.profile-card {
+    width: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    cursor: pointer;
+    transition: transform var(--transition-hover);
+}
+.profile-card:hover,
+.profile-card:focus-visible {
+    transform: translateY(-4px);
+    outline: none;
+}
+.profile-card:hover .profile-avatar,
+.profile-card:focus-visible .profile-avatar {
+    box-shadow: 0 6px 24px color-mix(in srgb, var(--accent-ai) 45%, transparent);
+}
+
+.profile-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* --- Avatares con inicial --- */
+.profile-avatar {
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-family: var(--font-sans);
+    color: var(--bg-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: box-shadow var(--transition-hover);
+}
+.profile-avatar--md {
+    width: 100px;
+    height: 100px;
+    font-size: 48px;
+}
+.profile-avatar--lg {
+    width: 140px;
+    height: 140px;
+    font-size: 60px;
+    margin-bottom: var(--space-4);
+}
+
+/* Colores por identidad (username), no por orden alfabético */
+.profile-avatar[data-user="turi"] { background: var(--accent-turi); }
+.profile-avatar[data-user="gabriel"] { background: var(--accent-gabriel); }
+
+/* Fallback por índice para futuros usuarios sin color dedicado */
+.profile-avatar[data-color-index="2"] { background: var(--accent-fund); }
+.profile-avatar[data-color-index="3"] { background: var(--accent-inventory); }
+
+/* --- Paso 2: password --- */
+.selected-name {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-6);
+}
+
+#step-password .form-field {
+    margin-bottom: var(--space-4);
+}
+#step-password input[type="password"] {
+    width: 260px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    text-align: center;
+    box-sizing: border-box;
+    transition: border-color var(--transition-hover);
+}
+#step-password input[type="password"]:focus {
+    outline: none;
+    border-color: var(--accent-ai);
+}
+
+.login-error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: color-mix(in srgb, var(--status-error) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--status-error) 30%, transparent);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--status-error);
+    margin-bottom: var(--space-4);
+}
+
+.login-submit {
+    width: 260px;
+    padding: var(--space-3) var(--space-4);
+    background: var(--accent-ai);
+    color: var(--bg-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: opacity var(--transition-hover);
+}
+.login-submit:hover { opacity: 0.88; }
+
+/* --- Enlaces / botones secundarios --- */
+.login-link-btn {
+    display: block;
+    margin: var(--space-3) auto 0;
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: var(--text-sm);
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: color var(--transition-hover);
+}
+.login-link-btn:hover {
+    color: var(--text-secondary);
+}
+
+.login-firma {
+    margin-top: var(--space-8);
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
