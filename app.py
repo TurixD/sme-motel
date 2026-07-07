@@ -18,6 +18,7 @@ from logger import get_logger, log_action, setup_logging
 from modules.auth import solo_admin
 from modules.asistente import asistente_bp
 from modules.configuracion import configuracion_bp
+from modules.cortes import cortes_bp
 from modules.cuartos import cuartos_bp
 from modules.empleados import empleados_bp
 from modules.fondos import fondos_bp
@@ -485,6 +486,7 @@ def create_app() -> Flask:
 
     # --- Blueprints ---
     app.register_blueprint(asistente_bp)
+    app.register_blueprint(cortes_bp)
     app.register_blueprint(cuartos_bp)
     app.register_blueprint(ingresos_bp)
     app.register_blueprint(gastos_bp)

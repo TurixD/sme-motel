@@ -321,6 +321,47 @@ def migrar() -> None:
             migraciones += 1
             print("  rentas: tabla creada (v2.1)")
 
+        # v2.3 — tabla cortes_turno (schema simplificado: sin sueldos ni descuentos)
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        _CORTES_SQL = """
+            CREATE TABLE cortes_turno (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha            TEXT    NOT NULL,
+                turno            TEXT    NOT NULL,
+                empleado_id      INTEGER NOT NULL,
+                bruto_calculado  REAL    NOT NULL DEFAULT 0,
+                bruto_declarado  REAL    NOT NULL DEFAULT 0,
+                estado           TEXT    NOT NULL DEFAULT 'declarado',
+                declarado_at     TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                confirmado_por   TEXT,
+                confirmado_at    TEXT,
+                editado_por      TEXT,
+                editado_at       TEXT,
+                motivo_rechazo   TEXT,
+                notas            TEXT,
+                UNIQUE(fecha, turno),
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id)
+            )
+        """
+        if "cortes_turno" not in tablas:
+            conn.execute(_CORTES_SQL)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes_turno(fecha)")
+            migraciones += 1
+            print("  cortes_turno: tabla creada (v2.3)")
+        else:
+            # Si la tabla existe con schema viejo (tiene sueldo_empleado), recrear si está vacía
+            cols_cortes = {r[1] for r in conn.execute("PRAGMA table_info(cortes_turno)").fetchall()}
+            if "sueldo_empleado" in cols_cortes or "declarado_por_nombre" in cols_cortes:
+                cnt = conn.execute("SELECT COUNT(*) FROM cortes_turno").fetchone()[0]
+                if cnt == 0:
+                    conn.execute("DROP TABLE cortes_turno")
+                    conn.execute(_CORTES_SQL)
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes_turno(fecha)")
+                    migraciones += 1
+                    print("  cortes_turno: recreada con schema simplificado (v2.3b)")
+
         conn.commit()
         if migraciones == 0:
             print("Sin cambios: la BD ya está actualizada.")

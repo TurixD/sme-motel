@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Historial de cortes — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cortes.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Historial de cortes</h1>
+        <p class="page-subtitle">{{ total }} registro{{ 's' if total != 1 }}</p>
+    </div>
+    <a href="/cortes" class="btn btn--ghost">← Volver</a>
+</div>
+
+<!-- Filtros -->
+<form class="historial-filtros" method="get" action="/cortes/historial">
+    <input class="form-input form-input--sm" type="date" name="fecha"
+           value="{{ filtro_fecha }}" placeholder="Fecha">
+    <select class="form-select form-select--sm" name="turno">
+        <option value="">Todos los turnos</option>
+        {% for k, v in turno_labels.items() %}
+        <option value="{{ k }}" {{ 'selected' if filtro_turno == k }}>{{ v }}</option>
+        {% endfor %}
+    </select>
+    <select class="form-select form-select--sm" name="estado">
+        <option value="">Todos los estados</option>
+        {% for est in ['declarado', 'confirmado', 'editado', 'rechazado'] %}
+        <option value="{{ est }}" {{ 'selected' if filtro_estado == est }}>{{ est | capitalize }}</option>
+        {% endfor %}
+    </select>
+    <button class="btn btn--ghost btn--sm" type="submit">Filtrar</button>
+    <a href="/cortes/historial" class="btn btn--ghost btn--sm">Limpiar</a>
+</form>
+
+{% if cortes %}
+<table class="cortes-tabla">
+    <thead>
+        <tr>
+            <th>Fecha</th>
+            <th>Turno</th>
+            <th>Empleado</th>
+            <th>Bruto sistema</th>
+            <th>Bruto declarado</th>
+            <th>Estado</th>
+            <th>Confirmado por</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in cortes %}
+        <tr>
+            <td class="mono">{{ r.fecha }}</td>
+            <td>{{ turno_labels.get(r.turno, r.turno) }}</td>
+            <td>{{ r.emp_nombre or '—' }}</td>
+            <td class="mono">{{ r.bruto_calculado | moneda }}</td>
+            <td class="mono text-accent">{{ r.bruto_declarado | moneda }}</td>
+            <td><span class="corte-badge corte-badge--{{ r.estado }}">{{ r.estado }}</span></td>
+            <td>{{ r.confirmado_por or '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if paginas > 1 %}
+<div class="historial-paginacion">
+    {% if pagina > 1 %}
+    <a href="?p={{ pagina - 1 }}&fecha={{ filtro_fecha }}&turno={{ filtro_turno }}&estado={{ filtro_estado }}"
+       class="btn btn--ghost btn--sm">← Anterior</a>
+    {% endif %}
+    <span class="pag-info">Página {{ pagina }} de {{ paginas }}</span>
+    {% if pagina < paginas %}
+    <a href="?p={{ pagina + 1 }}&fecha={{ filtro_fecha }}&turno={{ filtro_turno }}&estado={{ filtro_estado }}"
+       class="btn btn--ghost btn--sm">Siguiente →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<p class="empty-note">No hay cortes registrados con los filtros seleccionados.</p>
+{% endif %}
+
+{% endblock %}
