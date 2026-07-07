@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block title %}Cortes de turno — SME{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cortes.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Cortes de turno</h1>
+        <p class="page-subtitle">{{ hoy }}</p>
+    </div>
+    {% if es_admin %}
+    <a href="/cortes/historial" class="btn btn--ghost btn--sm">Ver historial</a>
+    {% endif %}
+</div>
+
+<!-- ═══════════════════════════════════════ TARJETAS DE TURNO -->
+<div class="cortes-grid">
+
+    {% for turno_key in ['manana', 'tarde', 'noche'] %}
+    {% set label = turno_labels[turno_key] %}
+    {% set c     = cortes_hoy.get(turno_key) %}
+    {% set estado = c.estado if c else 'pendiente' %}
+
+    <div class="corte-card corte-card--{{ estado }}">
+        <div class="corte-card__header">
+            <h2 class="corte-card__turno">{{ label }}</h2>
+            <span class="corte-badge corte-badge--{{ estado }}">
+                {% if   estado == 'pendiente' %}Sin declarar
+                {% elif estado == 'declarado' %}Declarado
+                {% elif estado == 'editado'   %}Editado
+                {% elif estado == 'anulado'   %}Anulado
+                {% endif %}
+            </span>
+        </div>
+
+        {% if c %}
+        <div class="corte-card__body">
+            <div class="corte-card__monto">{{ c.bruto_declarado | moneda }}</div>
+            <div class="corte-card__meta">
+                <span>Sistema: {{ c.bruto_calculado | moneda }}</span>
+            </div>
+            <div class="corte-card__quien">{{ c.emp_nombre or '—' }}</div>
+            {% if c.notas %}
+            <div class="corte-card__notas">{{ c.notas }}</div>
+            {% endif %}
+            {% if estado == 'anulado' and c.motivo_rechazo %}
+            <div class="corte-card__rechazo">Motivo: {{ c.motivo_rechazo }}</div>
+            {% endif %}
+            {% if estado == 'editado' and c.editado_por %}
+            <div class="corte-card__confirmado">Editado por {{ c.editado_por }}</div>
+            {% endif %}
+            {% if estado == 'anulado' and c.confirmado_por %}
+            <div class="corte-card__confirmado">Anulado por {{ c.confirmado_por }}</div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="corte-card__body corte-card__body--empty">
+            <p class="corte-card__empty-text">Aún no declarado</p>
+        </div>
+        {% endif %}
+
+        <div class="corte-card__actions">
+            {% if not c or estado == 'anulado' %}
+                {% set ventana_ok = es_admin or ventanas.get(turno_key, False) %}
+                {% if ventana_ok %}
+                <button class="btn btn--primary btn-declarar"
+                        data-turno="{{ turno_key }}"
+                        data-fecha="{{ fecha_noche if turno_key == 'noche' else hoy }}">
+                    Declarar corte
+                </button>
+                {% else %}
+                <button class="btn btn--ghost" disabled title="{{ ventana_label.get(turno_key, '') }}">
+                    Declarar corte
+                </button>
+                <span class="corte-ventana-hint">{{ ventana_label.get(turno_key, '') }}</span>
+                {% endif %}
+            {% endif %}
+
+            {% if c and es_admin %}
+            <button class="btn btn--ghost btn-ver-detalle"
+                    data-corte="{{ c | tojson | forceescape }}">
+                Ver detalle
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+
+<!-- ═══════════════════════════════════════ HISTÓRICO (solo admin) -->
+{% if es_admin and historico_7 %}
+<section class="cortes-historico">
+    <div class="historico-header">
+        <h2 class="historico-title">Últimos 7 días</h2>
+        <a href="/cortes/historial" class="btn btn--ghost btn--sm">Ver todo</a>
+    </div>
+    <table class="cortes-tabla">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Turno</th>
+                <th>Empleado</th>
+                <th>Bruto sistema</th>
+                <th>Bruto declarado</th>
+                <th>Estado</th>
+                <th>Editado/anulado por</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in historico_7 %}
+            <tr>
+                <td class="mono">{{ r.fecha }}</td>
+                <td>{{ turno_labels.get(r.turno, r.turno) }}</td>
+                <td>{{ r.emp_nombre or '—' }}</td>
+                <td class="mono">{{ r.bruto_calculado | moneda }}</td>
+                <td class="mono text-accent">{{ r.bruto_declarado | moneda }}</td>
+                <td><span class="corte-badge corte-badge--{{ r.estado }}">{{ r.estado }}</span></td>
+                <td>{{ r.editado_por or r.confirmado_por or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+
+<!-- ═══════════════════════════════════════ MODAL: DECLARAR -->
+<div class="modal-overlay" id="modal-declarar" hidden>
+    <div class="modal-card modal-card--wide">
+        <h3 class="modal-card__title" id="modal-dec-titulo">Declarar corte</h3>
+
+        <div class="form-group">
+            <label class="form-label" id="dec-emp-label">Empleado del turno</label>
+            <select id="dec-emp-id" class="form-select">
+                <option value="">— seleccionar —</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">
+                Bruto calculado por el sistema
+                <span id="dec-bruto-calc" class="form-hint">Calculando...</span>
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Bruto declarado (efectivo en caja)</label>
+            <input id="dec-bruto" class="form-input form-input--mono" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+
+        <!-- Bloque informativo de sueldos (solo visual, no se guarda) -->
+        <div class="corte-info-sueldos" id="dec-info-sueldos" hidden>
+            <div class="corte-info-sueldos__row">
+                <span class="corte-info-sueldos__label">Sueldo del empleado</span>
+                <span class="corte-info-sueldos__val" id="dec-info-sueldo-emp">$0</span>
+            </div>
+            <div class="corte-info-sueldos__row corte-info-sueldos__row--neto" id="dec-info-neto-row">
+                <span class="corte-info-sueldos__label">Efectivo tras pagar sueldo</span>
+                <span class="corte-info-sueldos__val corte-info-sueldos__val--accent" id="dec-info-neto">$0</span>
+            </div>
+            <p class="corte-info-sueldos__note" id="dec-info-nota"></p>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Notas (opcional)</label>
+            <input id="dec-notas" class="form-input" type="text" placeholder="Observaciones...">
+        </div>
+
+        <div id="modal-dec-error" class="form-error" hidden></div>
+
+        <div class="modal-card__actions">
+            <button id="btn-cancelar-declarar" class="btn btn--ghost" type="button">Cancelar</button>
+            <button id="btn-submit-declarar" class="btn btn--primary" type="button">Declarar corte</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ MODAL: DETALLE / CONFIRMAR (admin) -->
+<div class="modal-overlay" id="modal-detalle" hidden>
+    <div class="modal-card modal-card--wide">
+
+        <!-- Vista: detalle + acciones admin -->
+        <div id="det-view">
+            <h3 class="modal-card__title" id="det-titulo">Detalle de corte</h3>
+            <dl class="corte-dl" id="det-dl"></dl>
+            <div class="modal-card__actions" id="det-actions">
+                <button id="det-btn-rechazar" class="btn btn--ghost btn--danger" type="button">Anular</button>
+                <button id="det-btn-editar"   class="btn btn--primary" type="button">Editar</button>
+            </div>
+            <div class="modal-card__actions" id="det-actions-cerrar" hidden>
+                <button id="det-btn-cerrar" class="btn btn--ghost" type="button">Cerrar</button>
+            </div>
+        </div>
+
+        <!-- Modo editar -->
+        <div id="det-edit" hidden>
+            <h3 class="modal-card__title">Editar corte</h3>
+            <div class="form-group">
+                <label class="form-label">Empleado</label>
+                <select id="det-emp-id" class="form-select">
+                    {% for e in empleados %}
+                    <option value="{{ e.id }}" data-sueldo="{{ e.sueldo }}">{{ e.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Bruto declarado</label>
+                <input id="det-bruto" class="form-input form-input--mono" type="number" step="0.01" min="0">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notas</label>
+                <input id="det-notas" class="form-input" type="text">
+            </div>
+            <div id="det-edit-error" class="form-error" hidden></div>
+            <div class="modal-card__actions">
+                <button id="det-btn-cancelar-edit"  class="btn btn--ghost" type="button">Cancelar</button>
+                <button id="det-btn-submit-edit" class="btn btn--primary" type="button">Guardar cambios</button>
+            </div>
+        </div>
+
+        <!-- Modo anular -->
+        <div id="det-rechazar" hidden>
+            <h3 class="modal-card__title">Anular corte</h3>
+            <div class="form-group">
+                <label class="form-label">Motivo de la anulación (opcional)</label>
+                <input id="det-motivo" class="form-input" type="text" placeholder="Explica el problema...">
+            </div>
+            <div id="det-rechazo-error" class="form-error" hidden></div>
+            <div class="modal-card__actions">
+                <button id="det-btn-cancelar-rechazar" class="btn btn--ghost" type="button">Cancelar</button>
+                <button id="det-btn-submit-rechazar"   class="btn btn--danger" type="button">Anular</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.CORTES_DATA = {
+    hoy:          {{ hoy | tojson }},
+    empleados:    {{ empleados | tojson }},
+    asignaciones: {{ asignaciones_hoy | tojson }},
+    sueldos:      {{ turnos_sueldos | tojson }},
+    es_admin:     {{ es_admin | tojson }}
+};
+</script>
+<script src="{{ url_for('static', filename='js/cortes.js') }}" defer></script>
+{% endblock %}

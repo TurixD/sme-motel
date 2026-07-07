@@ -1,0 +1,410 @@
+/* =============================================================
+   cortes.css — Pantalla de cortes de turno (v2.3)
+   ============================================================= */
+
+/* ── Page header (local overrides) ──────────────────────────── */
+.page-title {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.page-subtitle {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+    margin-top: var(--space-1);
+    font-family: var(--font-mono);
+}
+
+/* ── Tarjetas de turno ──────────────────────────────────────── */
+.cortes-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+}
+
+@media (max-width: 768px) {
+    .cortes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.corte-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    transition: border-color var(--transition-hover);
+}
+
+.corte-card--declarado { border-color: var(--status-warning); }
+.corte-card--editado    { border-color: var(--status-info); }
+.corte-card--anulado    { border-color: var(--status-error); }
+
+.corte-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.corte-card__turno {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.corte-card__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.corte-card__body--empty {
+    justify-content: center;
+    align-items: center;
+    min-height: 60px;
+}
+
+.corte-card__empty-text {
+    color: var(--text-tertiary);
+    font-size: var(--text-sm);
+    font-style: italic;
+}
+
+.corte-card__monto {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.corte-card--anulado .corte-card__monto {
+    color: var(--status-error);
+    text-decoration: line-through;
+}
+
+.corte-card__meta {
+    display: flex;
+    gap: var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+}
+
+.corte-card__quien {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.corte-card__notas {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.corte-card__rechazo {
+    font-size: var(--text-xs);
+    color: var(--status-error);
+    background: color-mix(in srgb, var(--status-error) 10%, transparent);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+}
+
+.corte-card__confirmado {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+}
+
+.corte-card__actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+/* ── Badge de estado ────────────────────────────────────────── */
+.corte-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    padding: 2px var(--space-3);
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--text-tertiary) 15%, transparent);
+    color: var(--text-tertiary);
+}
+
+.corte-badge--pendiente {
+    background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
+    color: var(--text-tertiary);
+}
+.corte-badge--declarado {
+    background: color-mix(in srgb, var(--status-warning) 15%, transparent);
+    color: var(--status-warning);
+}
+.corte-badge--editado {
+    background: color-mix(in srgb, var(--status-info) 15%, transparent);
+    color: var(--status-info);
+}
+.corte-badge--anulado {
+    background: color-mix(in srgb, var(--status-error) 15%, transparent);
+    color: var(--status-error);
+    text-decoration: line-through;
+}
+
+/* ── Histórico ──────────────────────────────────────────────── */
+.cortes-historico {
+    margin-top: var(--space-8);
+}
+
+.historico-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+}
+
+.historico-title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.cortes-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.cortes-tabla th,
+.cortes-tabla td {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border);
+}
+
+.cortes-tabla th {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.cortes-tabla tbody tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.text-accent { color: var(--accent-income); }
+
+/* ── Historial filtros + paginación ─────────────────────────── */
+.historial-filtros {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: var(--space-6);
+}
+
+.historial-paginacion {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    justify-content: center;
+    margin-top: var(--space-6);
+}
+
+.pag-info {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+}
+
+/* ── Formularios en modal ───────────────────────────────────── */
+.form-group {
+    margin-bottom: var(--space-4);
+}
+
+.form-label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.form-input,
+.form-select {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-3);
+    font-family: var(--font-sans);
+    transition: border-color var(--transition-hover);
+}
+
+.form-input:focus,
+.form-select:focus {
+    outline: none;
+    border-color: var(--accent-ai);
+}
+
+.form-input--mono { font-family: var(--font-mono); }
+
+.form-input--sm,
+.form-select--sm  { font-size: var(--text-xs); padding: var(--space-1) var(--space-2); }
+
+.form-hint {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    margin-left: var(--space-2);
+}
+
+.form-hint--block {
+    display: block;
+    margin-left: 0;
+    margin-bottom: var(--space-3);
+}
+
+.form-error {
+    font-size: var(--text-sm);
+    color: var(--status-error);
+    background: color-mix(in srgb, var(--status-error) 10%, transparent);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+/* ── Tarde: 3 filas de empleado+sueldo ──────────────────────── */
+.tarde-empleados-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+}
+
+.tarde-emp-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 100px;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.tarde-emp-label {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+/* ── Bloque informativo de sueldos (solo visual, no se guarda) ── */
+.corte-info-sueldos {
+    background: color-mix(in srgb, var(--accent-ai) 6%, var(--bg-tertiary));
+    border: 1px solid color-mix(in srgb, var(--accent-ai) 18%, transparent);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.corte-info-sueldos__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--text-sm);
+}
+
+.corte-info-sueldos__row--neto {
+    padding-top: var(--space-2);
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.corte-info-sueldos__label {
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+}
+
+.corte-info-sueldos__val {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.corte-info-sueldos__val--accent {
+    color: var(--accent-income);
+}
+
+.corte-info-sueldos__note {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    margin-top: var(--space-1);
+}
+
+.corte-info-sueldos::before {
+    content: 'Solo informativo — no se guarda';
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ── Modal wide ─────────────────────────────────────────────── */
+.modal-card--wide {
+    max-width: 500px;
+}
+
+/* ── Detail list ────────────────────────────────────────────── */
+.corte-dl {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-6);
+    font-size: var(--text-sm);
+}
+
+.corte-dl dt {
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.corte-dl dd {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.corte-dl dd.dd--text {
+    font-family: var(--font-sans);
+}
+
+/* ── Ventana horaria hint ───────────────────────────────────── */
+.corte-ventana-hint {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    display: block;
+    margin-top: var(--space-1);
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ── Danger button variant ──────────────────────────────────── */
+.btn--danger {
+    color: var(--status-error);
+    border-color: color-mix(in srgb, var(--status-error) 30%, transparent);
+}
+
+.btn--danger:hover {
+    background: color-mix(in srgb, var(--status-error) 10%, transparent);
+    border-color: var(--status-error);
+}

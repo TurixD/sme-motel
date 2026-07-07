@@ -101,6 +101,9 @@
         <a href="/cuartos" class="bottom-nav__item {{ 'is-active' if request.path.startswith('/cuartos') }}" data-tooltip="Cuartos" aria-label="Cuartos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="7" y="3" width="10" height="18" rx="1"/><circle cx="14" cy="12" r="1" fill="currentColor"/></svg>
         </a>
+        <a href="/cortes" class="bottom-nav__item {{ 'is-active' if request.path.startswith('/cortes') }}" data-tooltip="Cortes" aria-label="Cortes de turno">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+        </a>
         {% if es_admin %}
         <a href="/ingresos" class="bottom-nav__item {{ 'is-active' if request.path.startswith('/ingresos') }}" data-tooltip="Ingresos" aria-label="Ingresos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>

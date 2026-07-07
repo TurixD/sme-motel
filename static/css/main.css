@@ -424,6 +424,21 @@ a {
     to   { transform: translateY(0);    opacity: 1; }
 }
 
+/* ── Page header util (v2.3) ── */
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+    flex-wrap: wrap;
+}
+
+.btn--sm {
+    padding: var(--space-1) var(--space-3) !important;
+    font-size: var(--text-xs) !important;
+}
+
 /* ── Flash messages (v2.2) ── */
 .flash-container {
     position: fixed;
