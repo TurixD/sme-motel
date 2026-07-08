@@ -118,6 +118,7 @@
     var decInfoNota     = document.getElementById('dec-info-nota');
 
     var decTurnoActual = '';
+    var decFechaActual = '';   // fecha real del turno (para noche = día anterior; mañana/tarde = hoy)
 
     function actualizarInfoSueldos() {
         var bruto  = parseFloat(decBruto.value) || 0;
@@ -142,6 +143,7 @@
 
     function abrirModalDeclarar(turno, fecha) {
         decTurnoActual = turno;
+        decFechaActual = fecha;   // guardar la fecha del turno para el submit (evita off-by-one en noche)
         var titulos = { manana: 'Declarar corte Mañana', tarde: 'Declarar corte Tarde', noche: 'Declarar corte Noche' };
         document.getElementById('modal-dec-titulo').textContent = titulos[turno] || 'Declarar corte';
 
@@ -202,7 +204,7 @@
 
             postJSON('/cortes/api/declarar', {
                 turno:           decTurnoActual,
-                fecha:           hoy,
+                fecha:           decFechaActual || hoy,   // fecha real del turno (noche = día anterior)
                 empleado_id:     empId,
                 bruto_declarado: bruto,
                 notas:           (decNotas.value || '').trim() || null,

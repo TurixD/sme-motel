@@ -79,16 +79,10 @@ def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
     Recalcula ingresos_diarios para una fecha sumando los cortes válidos
     (estado 'declarado' o 'editado'; los 'anulado' no cuentan).
 
-    Solo genera/actualiza el registro si ya existen los 3 turnos del día
-    (sin importar su estado individual) — evita crear un total parcial
-    mientras faltan turnos por declarar. Es indiferente al orden en que se
-    declaren los turnos y se recalcula en cada declaración/edición/anulación.
+    Siempre recalcula con los cortes existentes, sin importar cuántos turnos
+    haya declarados (1, 2 o 3). El total se actualiza de forma incremental en
+    cada declaración/edición/anulación, reflejando lo declarado hasta el momento.
     """
-    turnos_presentes = conn.execute(
-        "SELECT COUNT(DISTINCT turno) FROM cortes_turno WHERE fecha = ?", (fecha,)
-    ).fetchone()[0]
-    if turnos_presentes < 3:
-        return {"ok": False, "warning": "Faltan turnos por declarar"}
 
     bruto_total = conn.execute(
         """SELECT COALESCE(SUM(bruto_declarado), 0) FROM cortes_turno
