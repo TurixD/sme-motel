@@ -379,6 +379,7 @@ def migrar() -> None:
                 bruto_declarado  REAL    NOT NULL DEFAULT 0,
                 estado           TEXT    NOT NULL DEFAULT 'declarado',
                 declarado_at     TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                declarado_por_nombre TEXT NOT NULL DEFAULT '',
                 confirmado_por   TEXT,
                 confirmado_at    TEXT,
                 editado_por      TEXT,
@@ -397,7 +398,7 @@ def migrar() -> None:
         else:
             # Si la tabla existe con schema viejo (tiene sueldo_empleado), recrear si está vacía
             cols_cortes = {r[1] for r in conn.execute("PRAGMA table_info(cortes_turno)").fetchall()}
-            if "sueldo_empleado" in cols_cortes or "declarado_por_nombre" in cols_cortes:
+            if "sueldo_empleado" in cols_cortes:
                 cnt = conn.execute("SELECT COUNT(*) FROM cortes_turno").fetchone()[0]
                 if cnt == 0:
                     conn.execute("DROP TABLE cortes_turno")
@@ -405,6 +406,26 @@ def migrar() -> None:
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes_turno(fecha)")
                     migraciones += 1
                     print("  cortes_turno: recreada con schema simplificado (v2.3b)")
+
+        # v2.4 — columna declarado_por_nombre en cortes_turno (autoría de la declaración)
+        tablas = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "cortes_turno" in tablas:
+            cols_cortes = {r[1] for r in conn.execute("PRAGMA table_info(cortes_turno)").fetchall()}
+            if "declarado_por_nombre" not in cols_cortes:
+                conn.execute(
+                    "ALTER TABLE cortes_turno ADD COLUMN declarado_por_nombre TEXT NOT NULL DEFAULT ''"
+                )
+                # Backfill histórico: usar el nombre del empleado del turno
+                conn.execute(
+                    """UPDATE cortes_turno
+                       SET declarado_por_nombre = COALESCE(
+                           (SELECT nombre FROM empleados WHERE empleados.id = cortes_turno.empleado_id), '')
+                       WHERE declarado_por_nombre = ''"""
+                )
+                migraciones += 1
+                print("  cortes_turno: columna 'declarado_por_nombre' agregada + backfill (v2.4)")
 
         # v2.3c — eliminar estado 'confirmado' (ya no existe en el flujo nuevo)
         tablas = {r[0] for r in conn.execute(

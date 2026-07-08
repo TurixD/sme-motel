@@ -6,8 +6,9 @@
 (function () {
     var DATOS     = window.CORTES_DATA || {};
     var empleados = DATOS.empleados   || [];   // todos los activos con .sueldo
-    var asigs     = DATOS.asignaciones || {};  // {turno: [{empleado_id, emp_nombre, sueldo}]}
-    var sueldos   = DATOS.sueldos     || {};   // {turno: monto} — fallback
+    var asigs     = DATOS.asignaciones  || {}; // {turno: [{empleado_id, emp_nombre, sueldo}]}
+    var adminNoms = DATOS.admin_nombres || []; // ['Turi','Gabriel'] — para "Declarado por"
+    var sueldos   = DATOS.sueldos       || {}; // {turno: monto} — fallback
     var hoy       = DATOS.hoy         || '';
     var esAdmin   = DATOS.es_admin    || false;
 
@@ -74,6 +75,39 @@
         if (lista.length === 1) sel.selectedIndex = 1;
     }
 
+    // ── "Declarado por": admins (siempre) + empleados asignados del turno ──
+
+    function poblarDeclaradoPor(sel, turno) {
+        if (!sel) return;
+        var asigTurno = asigs[turno] || [];
+        var vistos    = {};
+
+        sel.innerHTML = '<option value="">— seleccionar —</option>';
+
+        // Admins siempre disponibles (Turi, Gabriel)
+        adminNoms.forEach(function (nombre) {
+            vistos[nombre] = true;
+            var opt = document.createElement('option');
+            opt.value = nombre;
+            opt.textContent = nombre;
+            sel.appendChild(opt);
+        });
+
+        // Empleados asignados a ese turno+fecha (sin duplicar admins)
+        var empsTurno = asigTurno.filter(function (a) { return !vistos[a.emp_nombre]; });
+        if (empsTurno.length > 0) {
+            var grupo = document.createElement('optgroup');
+            grupo.label = 'Empleados del turno';
+            empsTurno.forEach(function (a) {
+                var opt = document.createElement('option');
+                opt.value = a.emp_nombre;
+                opt.textContent = a.emp_nombre;
+                grupo.appendChild(opt);
+            });
+            sel.appendChild(grupo);
+        }
+    }
+
     // ── FIX 2: sueldo del día con empleados únicos (evita doble turno duplicado) ──
 
     function calcSueldosDia() {
@@ -108,6 +142,7 @@
 
     var modalDec        = document.getElementById('modal-declarar');
     var decEmpId        = document.getElementById('dec-emp-id');
+    var decDeclaradoPor = document.getElementById('dec-declarado-por');
     var decBruto        = document.getElementById('dec-bruto');
     var decNotas        = document.getElementById('dec-notas');
     var decBrutoCalc    = document.getElementById('dec-bruto-calc');
@@ -155,6 +190,8 @@
 
         // FIX 1: poblar dropdown con empleados del turno
         poblarDropdown(decEmpId, turno);
+        // Nuevo: poblar "Declarado por" (admins + asignados del turno)
+        poblarDeclaradoPor(decDeclaradoPor, turno);
 
         // Calcular bruto desde API
         fetch('/cortes/api/calcular_bruto/' + turno + '/' + fecha, {
@@ -194,20 +231,23 @@
     if (btnSubmitDec) {
         btnSubmitDec.addEventListener('click', function () {
             hideError(decError);
-            var empId = parseInt(decEmpId.value);
-            var bruto = parseFloat(decBruto.value);
+            var empId       = parseInt(decEmpId.value);
+            var bruto       = parseFloat(decBruto.value);
+            var declaradoPor = decDeclaradoPor ? decDeclaradoPor.value : '';
             if (!empId)                    { showError(decError, 'Selecciona un empleado.'); return; }
+            if (!declaradoPor)             { showError(decError, 'Indica quién declaró el corte.'); return; }
             if (isNaN(bruto) || bruto < 0) { showError(decError, 'Ingresa un bruto válido.'); return; }
 
             btnSubmitDec.disabled    = true;
             btnSubmitDec.textContent = 'Guardando...';
 
             postJSON('/cortes/api/declarar', {
-                turno:           decTurnoActual,
-                fecha:           decFechaActual || hoy,   // fecha real del turno (noche = día anterior)
-                empleado_id:     empId,
-                bruto_declarado: bruto,
-                notas:           (decNotas.value || '').trim() || null,
+                turno:                decTurnoActual,
+                fecha:                decFechaActual || hoy,   // fecha real del turno (noche = día anterior)
+                empleado_id:          empId,
+                bruto_declarado:      bruto,
+                declarado_por_nombre: declaradoPor,
+                notas:                (decNotas.value || '').trim() || null,
             }).then(function (d) {
                 if (d.ok) {
                     location.reload();
@@ -254,6 +294,7 @@
             ['Turno',           LABEL_TURNO[c.turno]  || c.turno,       false],
             ['Fecha',           c.fecha,                                  true],
             ['Empleado',        c.emp_nombre || '—',                     false],
+            ['Declarado por',   c.declarado_por_nombre || '—',           false],
             ['Bruto sistema',   fmt(c.bruto_calculado),                   true],
             ['Bruto declarado', fmt(c.bruto_declarado),                   true],
             ['Estado',          LABEL_ESTADO[c.estado] || c.estado,      false],

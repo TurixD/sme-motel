@@ -142,6 +142,13 @@
         </div>
 
         <div class="form-group">
+            <label class="form-label" for="dec-declarado-por">Declarado por <span class="req">*</span></label>
+            <select id="dec-declarado-por" class="form-select">
+                <option value="">— seleccionar —</option>
+            </select>
+        </div>
+
+        <div class="form-group">
             <label class="form-label">
                 Bruto calculado por el sistema
                 <span id="dec-bruto-calc" class="form-hint">Calculando...</span>
@@ -248,8 +255,9 @@
 window.CORTES_DATA = {
     hoy:          {{ hoy | tojson }},
     empleados:    {{ empleados | tojson }},
-    asignaciones: {{ asignaciones_hoy | tojson }},
-    sueldos:      {{ turnos_sueldos | tojson }},
+    asignaciones:  {{ asignaciones_hoy | tojson }},
+    admin_nombres: {{ admin_nombres | tojson }},
+    sueldos:       {{ turnos_sueldos | tojson }},
     es_admin:     {{ es_admin | tojson }}
 };
 </script>

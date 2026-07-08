@@ -70,6 +70,7 @@
             if (!data.ok) return;
 
             renderFeed(data.items);
+            renderContadores(data.contadores);
             lastPollTs    = Date.now();
             rentasActivas = data.items
                 .filter(i => i.estado === 'activo')
@@ -90,6 +91,17 @@
             stopPolling();
         }
     });
+
+    /* ── Contador de rentas (día operativo) ──────────────────── */
+    function renderContadores(cont) {
+        if (!cont) return;
+        var m = document.getElementById('cont-manana');
+        var t = document.getElementById('cont-tarde');
+        var n = document.getElementById('cont-noche');
+        if (m) m.textContent = cont.manana;
+        if (t) t.textContent = cont.tarde;
+        if (n) n.textContent = cont.noche;
+    }
 
     /* ── Render del feed ─────────────────────────────────────── */
     function renderFeedItem(item) {

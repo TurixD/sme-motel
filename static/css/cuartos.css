@@ -39,6 +39,34 @@
    Grid de cuartos
    ============================================================= */
 
+.contador-rentas {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-6);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.contador-rentas__label {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.contador-rentas__item b {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.contador-rentas__sep {
+    color: var(--text-tertiary);
+}
+
 .cuartos-section {
     display: flex;
     flex-direction: column;

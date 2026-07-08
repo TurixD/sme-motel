@@ -182,6 +182,15 @@ def index():
                 "sueldo":      float(a["sueldo"]),
             })
 
+        # Nombres de admins (turi, gabriel) — para el campo "Declarado por".
+        # Match usuarios.nombre_display == empleados.nombre (no hay FK directa).
+        admin_nombres = [
+            r["nombre_display"]
+            for r in conn.execute(
+                "SELECT nombre_display FROM usuarios WHERE activo=1 ORDER BY nombre_display"
+            ).fetchall()
+        ]
+
         historico_7 = []
         if es_admin:
             hace7 = (date.today() - timedelta(days=6)).isoformat()
@@ -206,6 +215,7 @@ def index():
         cortes_hoy=cortes_hoy,
         empleados=empleados,
         asignaciones_hoy=asignaciones_hoy,
+        admin_nombres=admin_nombres,
         turnos_sueldos=turnos_sueldos,
         historico_7=historico_7,
         turno_labels=_TURNO_LABELS,
@@ -239,12 +249,15 @@ def api_declarar():
     fecha           = data.get("fecha") or date.today().isoformat()
     empleado_id     = data.get("empleado_id")
     bruto_declarado = data.get("bruto_declarado")
+    declarado_por   = (data.get("declarado_por_nombre") or "").strip()
     notas           = (data.get("notas") or "").strip() or None
 
     if turno not in _TURNOS_ORDEN:
         return jsonify({"ok": False, "error": "Turno inválido"}), 400
     if empleado_id is None or bruto_declarado is None:
         return jsonify({"ok": False, "error": "Faltan campos requeridos"}), 400
+    if not declarado_por:
+        return jsonify({"ok": False, "error": "Indica quién declaró el corte"}), 400
 
     # Empleado solo puede declarar dentro de su ventana horaria
     modo = _get_modo()
@@ -264,9 +277,10 @@ def api_declarar():
             cur = conn.execute(
                 """INSERT INTO cortes_turno
                    (fecha, turno, empleado_id, bruto_calculado, bruto_declarado,
-                    estado, declarado_at, notas)
-                   VALUES (?,?,?,?,?,'declarado',?,?)""",
-                (fecha, turno, int(empleado_id), bruto_calc, bruto_declarado, ahora, notas),
+                    estado, declarado_at, declarado_por_nombre, notas)
+                   VALUES (?,?,?,?,?,'declarado',?,?,?)""",
+                (fecha, turno, int(empleado_id), bruto_calc, bruto_declarado,
+                 ahora, declarado_por, notas),
             )
             corte_id = cur.lastrowid
             _actualizar_ingresos_diarios(conn, fecha)

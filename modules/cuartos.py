@@ -4,13 +4,14 @@ cuartos.py - Módulo de cuartos y rentas (v2.1).
 
 import sqlite3
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, jsonify, render_template, request
 
 from config import Config
 from logger import log_action
 from modules.auth import solo_admin
+from modules.cortes import _calcular_bruto  # reutiliza franjas horarias por turno
 
 cuartos_bp = Blueprint("cuartos", __name__)
 
@@ -37,6 +38,24 @@ def _modo_actual() -> str:
             return row["valor"] if row else "admin_turi"
     except Exception:
         return "admin_turi"
+
+
+def _contadores_dia_operativo(conn) -> dict:
+    """
+    Cuenta cuartos rentados (estado='activo') por turno para el "día operativo"
+    (08:00–08:00 del día siguiente). Reutiliza las franjas horarias de
+    _calcular_bruto (mañana 08–16, tarde 16–23, noche 23–08 cruzando medianoche).
+
+    La fecha operativa es hoy, salvo entre 00:00 y 07:59, que aún pertenece a la
+    noche del día operativo anterior (mismo criterio que el corte de noche).
+    """
+    ahora = datetime.now()
+    op_day = date.today() - timedelta(days=1) if ahora.hour < 8 else date.today()
+    fecha = op_day.isoformat()
+    return {
+        t: _calcular_bruto(conn, t, fecha)["count_rentas"]
+        for t in ("manana", "tarde", "noche")
+    }
 
 
 def _actividad_dia(conn, es_admin: bool) -> list[dict]:
@@ -75,6 +94,7 @@ def index():
             "SELECT * FROM cuartos ORDER BY numero"
         ).fetchall()]
         rentas_dia = _actividad_dia(conn, es_admin)
+        contadores = _contadores_dia_operativo(conn)
 
     rentas_activas_json = [
         {
@@ -91,6 +111,7 @@ def index():
         cuartos=cuartos,
         rentas_dia=rentas_dia,
         rentas_activas_json=rentas_activas_json,
+        contadores=contadores,
         es_admin=es_admin,
         modo_actual=modo,
     )
@@ -104,7 +125,8 @@ def api_actividad_dia():
     es_admin = modo.startswith("admin_")
     with _db() as conn:
         items = _actividad_dia(conn, es_admin)
-    return jsonify({"ok": True, "items": items, "es_admin": es_admin})
+        contadores = _contadores_dia_operativo(conn)
+    return jsonify({"ok": True, "items": items, "es_admin": es_admin, "contadores": contadores})
 
 
 # ── API: registrar renta ─────────────────────────────────────
