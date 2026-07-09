@@ -55,7 +55,7 @@ REGLAS DE NEGOCIO:
 - Luz→descuenta fondo CFE; Renta→fondo Renta; Mantenimiento/Otro→Reserva (si confirma)
 - Un empleado NO puede tener dos turnos el mismo día — verifica conflictos con SELECT antes de proponer cambio
 - Si el cambio crearía doble turno → propón INTERCAMBIO con DOS llamadas a proponer_cambio_datos explicando que son parte del mismo intercambio
-- Los pagos a empleados se hacen automáticamente al cerrar turno ($400 manana/tarde, $500 noche)
+- Los sueldos (turnos.sueldo, hoy $400 mañana/tarde y $500 noche) YA se descuentan en los cortes de turno: ingresos_diarios.total_neto es NETO de sueldos. NUNCA vuelvas a restar la nómina de los ingresos ni de la utilidad — ya está descontada.
 
 REGLAS DE HERRAMIENTAS:
 - Pregunta de lectura → ejecutar_sql_lectura
@@ -67,6 +67,14 @@ REGLAS DE HERRAMIENTAS:
 ESQUEMA BD (SQLite, tipos TEXT/REAL/INTEGER):
 
 ingresos_diarios(id, fecha TEXT YYYY-MM-DD, monto_efectivo, monto_tarjeta, monto_transferencia, comision_tarjeta=tarjeta×0.04, total_neto, notas, creado_en)
+  * total_neto YA es NETO de sueldos (los cortes de turno descuentan la nómina). NO restes la nómina otra vez.
+  * La mayoría de los días se genera automáticamente desde cortes_turno (efectivo = corte tarde + corte noche; tarjeta = rentas con es_tarjeta del día).
+
+cortes_turno(id, fecha, turno [manana|tarde|noche], empleado_id FK, bruto_calculado, bruto_declarado, estado [declarado|editado|anulado], declarado_por_nombre, notas)
+  * Corte del efectivo esperado en caja por turno. mañana = cuartos efectivo − sueldos mañana; tarde = (mañana+tarde efectivo) − sueldos mañana+tarde+noche (acumulativo); noche = cuartos efectivo. Solo estados 'declarado'/'editado' cuentan.
+
+rentas(id, cuarto_id FK, fecha, hora_registro, duracion_horas, precio_default, precio_cobrado, notas, estado [activo|cancelado], registrado_por, editado INTEGER 0/1, es_tarjeta INTEGER 0/1 [pago con tarjeta, no entra a caja])
+cuartos(id, numero, tipo, nombre_display, precio_6h, precio_12h, precio_18h, precio_24h)
 
 gastos_extras(id, fecha, categoria TEXT [Gas|Luz|Agua-Pipas|Agua-Embotellada|Mantenimiento|Sam's|StarTV|Renta|Otro], monto, descripcion, recibo_id, fondo_descontado_id, creado_en)
 

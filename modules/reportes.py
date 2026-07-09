@@ -340,17 +340,17 @@ def _construir_prompt(tipo: str, label: str, tarjetas: dict,
         "Eres un asistente de negocios para un motel en Aguascalientes, México. "
         "Analiza este reporte y escribe un resumen breve y honesto, sin ser corporativo ni falso.\n\n"
         f"REPORTE [{tipo_str}]: {label}\n\n"
-        "INGRESOS\n"
+        "INGRESOS (ya NETOS de sueldos: los cortes de turno descuentan la nómina antes de registrar el ingreso)\n"
         f"  Este periodo:   {fmt(t['ingresos']['actual'])}\n"
         f"  Periodo ant.:   {fmt(t['ingresos']['anterior'])}  ({delta(t['ingresos']['delta_pct'])})\n\n"
         "GASTOS\n"
         f"  Este periodo:   {fmt(t['gastos']['actual'])}\n"
         f"  Periodo ant.:   {fmt(t['gastos']['anterior'])}  ({delta(t['gastos']['delta_pct'])})\n"
         f"  Por categoría:\n{gastos_lines}\n\n"
-        "UTILIDAD\n"
+        "UTILIDAD (= ingresos − gastos; los sueldos YA están descontados en ingresos)\n"
         f"  Este periodo:   {fmt(t['utilidad']['actual'])}\n"
         f"  Periodo ant.:   {fmt(t['utilidad']['anterior'])}  ({delta(t['utilidad']['delta_pct'])})\n\n"
-        "NÓMINA\n"
+        "NÓMINA (SOLO INFORMATIVA — ya está descontada de los ingresos y la utilidad de arriba; NO la restes otra vez)\n"
         f"  Total pagado:   {fmt(nomina_total)}  ({len(nomina)} empleados)\n"
         f"  Detalle: {nomina_lines}\n\n"
         f"FONDOS (movimientos del periodo):\n{fondos_lines}\n\n"
@@ -565,7 +565,7 @@ def exportar():
     for r in cat_rows:
         w.writerow([r["categoria"], f"${float(r['t']):,.0f}"])
     w.writerow([])
-    w.writerow(["Nómina (informativa)", "Días", "Total"])
+    w.writerow(["Nómina (ya descontada de ingresos)", "Días", "Total"])
     total_nom = 0.0
     for r in nom_rows:
         t = float(r["tot"])
