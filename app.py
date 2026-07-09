@@ -11,6 +11,7 @@ import urllib.request
 from datetime import date, datetime, timedelta
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
 from config import Config
@@ -465,6 +466,11 @@ def get_modo_actual() -> str:
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # Detrás de un proxy (tailscale serve para HTTPS): confiar en
+    # X-Forwarded-Proto/Host para que Flask sepa que es HTTPS (url_for https,
+    # cookies seguras). Sin proxy (HTTP directo) no cambia nada.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
     setup_logging()
     log = get_logger()
