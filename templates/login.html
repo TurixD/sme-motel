@@ -30,7 +30,11 @@
                  onclick="seleccionarPerfil(this)"
                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();seleccionarPerfil(this)}">
                 <div class="profile-avatar profile-avatar--md" data-user="{{ u.username }}" data-color-index="{{ loop.index0 }}">
+                    {% if u.username == 'empleado' %}
+                    <img src="{{ url_for('static', filename='img/perfil_mostrador.jpg') }}" alt="Mostrador" class="profile-avatar__img">
+                    {% else %}
                     {{ u.nombre_display[0]|upper }}
+                    {% endif %}
                 </div>
                 <span class="profile-name">{{ u.nombre_display }}</span>
             </div>
@@ -86,9 +90,13 @@
             document.getElementById('hidden-username').value = usuario.username;
             document.getElementById('selected-name').textContent = usuario.nombre_display;
             const avatar = document.getElementById('selected-avatar');
-            avatar.textContent = usuario.nombre_display[0].toUpperCase();
             avatar.dataset.user = usuario.username;
             avatar.dataset.colorIndex = colorIndex;
+            if (usuario.username === 'empleado') {
+                avatar.innerHTML = '<img src="/static/img/perfil_mostrador.jpg" alt="Mostrador" class="profile-avatar__img">';
+            } else {
+                avatar.textContent = usuario.nombre_display[0].toUpperCase();
+            }
         }
 
         function seleccionarPerfil(card) {
