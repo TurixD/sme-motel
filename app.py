@@ -10,12 +10,12 @@ import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
 from config import Config
 from logger import get_logger, log_action, setup_logging
-from modules.auth import solo_admin
+from modules.auth import solo_admin, _es_ajax, _get_modo
 from modules.asistente import asistente_bp
 from modules.configuracion import configuracion_bp
 from modules.cortes import cortes_bp
@@ -458,26 +458,8 @@ def _gerty_context() -> dict:
 
 
 def get_modo_actual() -> str:
-    """Lee el modo activo desde BD. Fuente de verdad única."""
-    try:
-        with sqlite3.connect(Config.DB_PATH) as conn:
-            row = conn.execute(
-                "SELECT valor FROM configuracion WHERE clave='modo_actual'"
-            ).fetchone()
-            return row[0] if row else "admin_turi"
-    except Exception:
-        return "admin_turi"
-
-
-def set_modo_actual(nuevo_modo: str) -> None:
-    """Persiste el modo activo en BD y loggea la acción."""
-    with sqlite3.connect(Config.DB_PATH) as conn:
-        conn.execute(
-            "UPDATE configuracion SET valor=? WHERE clave='modo_actual'",
-            (nuevo_modo,),
-        )
-        conn.commit()
-    log_action("Modo activo cambiado a: %s", nuevo_modo)
+    """Modo del dispositivo actual (según su sesión). '' si no ha iniciado sesión."""
+    return _get_modo()
 
 
 def create_app() -> Flask:
@@ -519,6 +501,7 @@ def create_app() -> Flask:
             admin_nombre = "Turi"
         elif modo == "admin_gabriel":
             admin_nombre = "Gabriel"
+        usuario_nombre = admin_nombre or ("Mostrador" if modo == "empleado" else "")
         return {
             "fecha_actual":  _fecha_es(datetime.now()),
             "clima":         clima_obj["valor"],
@@ -527,6 +510,7 @@ def create_app() -> Flask:
             "modo_actual":   modo,
             "es_admin":      es_admin,
             "admin_nombre":  admin_nombre,
+            "usuario_nombre": usuario_nombre,
         }
 
     @app.route("/")
@@ -539,15 +523,15 @@ def create_app() -> Flask:
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
-        if request.method == "GET" and get_modo_actual().startswith("admin_"):
+        if request.method == "GET" and get_modo_actual():
             return redirect(url_for("index"))
 
         with sqlite3.connect(Config.DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             usuarios = [
                 dict(row) for row in conn.execute(
-                    "SELECT id, username, nombre_display FROM usuarios "
-                    "WHERE activo = 1 ORDER BY nombre_display"
+                    "SELECT id, username, nombre_display, rol FROM usuarios "
+                    "WHERE activo = 1 ORDER BY rol DESC, nombre_display"
                 ).fetchall()
             ]
 
@@ -559,14 +543,17 @@ def create_app() -> Flask:
             with sqlite3.connect(Config.DB_PATH) as conn:
                 conn.row_factory = sqlite3.Row
                 usuario = conn.execute(
-                    "SELECT username, password_hash, nombre_display, activo "
+                    "SELECT username, password_hash, nombre_display, activo, rol "
                     "FROM usuarios WHERE username=?",
                     (username,),
                 ).fetchone()
             if usuario and usuario["activo"] and check_password_hash(usuario["password_hash"], password):
-                nuevo_modo = f"admin_{usuario['username']}"
-                set_modo_actual(nuevo_modo)
-                log_action("Login admin exitoso: %s", usuario["username"])
+                # El modo se deriva del rol; solo 'admin' obtiene privilegios de admin.
+                session["modo"] = (
+                    f"admin_{usuario['username']}" if usuario["rol"] == "admin" else "empleado"
+                )
+                session.permanent = True
+                log_action("Login exitoso: %s (rol=%s)", usuario["username"], usuario["rol"])
                 return redirect(url_for("index"))
             else:
                 log_action("Login fallido: usuario '%s'", username)
@@ -578,9 +565,22 @@ def create_app() -> Flask:
 
     @app.route("/logout", methods=["POST"])
     def logout():
-        set_modo_actual("empleado")
-        log_action("Toggle a modo empleado")
-        return redirect(url_for("index"))
+        modo = get_modo_actual()
+        session.clear()
+        log_action("Logout: %s", modo or "(sin sesión)")
+        return redirect(url_for("login"))
+
+    # ── Gate global: todo requiere sesión iniciada (seguro para remoto) ──
+    _ENDPOINTS_PUBLICOS = {"login", "static"}
+
+    @app.before_request
+    def _requiere_login():
+        if request.endpoint in _ENDPOINTS_PUBLICOS:
+            return
+        if not get_modo_actual():
+            if _es_ajax():
+                return jsonify({"error": "No autenticado"}), 401
+            return redirect(url_for("login"))
 
     @app.route("/api/gerty/estado")
     def gerty_estado():

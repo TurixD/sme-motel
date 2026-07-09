@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from config import Config
 from logger import log_action
-from modules.auth import solo_admin
+from modules.auth import solo_admin, _get_modo
 from modules.cortes import _calcular_bruto  # reutiliza franjas horarias por turno
 from modules.tiempo import dia_operativo
 
@@ -31,14 +31,8 @@ def _db():
 
 
 def _modo_actual() -> str:
-    try:
-        with _db() as conn:
-            row = conn.execute(
-                "SELECT valor FROM configuracion WHERE clave='modo_actual'"
-            ).fetchone()
-            return row["valor"] if row else "admin_turi"
-    except Exception:
-        return "admin_turi"
+    """Modo del dispositivo actual (sesión). '' si no ha iniciado sesión."""
+    return _get_modo()
 
 
 def _contadores_dia_operativo(conn) -> dict:

@@ -1,25 +1,21 @@
 """
-auth.py - Utilitarios de autorización por rol (v2.2).
+auth.py - Utilitarios de autorización por rol (v2.5).
+
+El modo (admin_turi | admin_gabriel | empleado) vive en la SESIÓN de cada
+dispositivo (cookie firmada), no en una bandera global de BD. Así, que Turi
+inicie sesión en su celular no vuelve admin al mostrador ni a nadie más.
 """
 
-import sqlite3
 from functools import wraps
 
-from flask import flash, jsonify, redirect, request
+from flask import flash, jsonify, redirect, request, session
 
-from config import Config
 from logger import log_action
 
 
 def _get_modo() -> str:
-    try:
-        with sqlite3.connect(Config.DB_PATH) as conn:
-            row = conn.execute(
-                "SELECT valor FROM configuracion WHERE clave='modo_actual'"
-            ).fetchone()
-            return row[0] if row else "admin_turi"
-    except Exception:
-        return "admin_turi"
+    """Modo del dispositivo actual según su sesión ('' si no ha iniciado sesión)."""
+    return session.get("modo", "")
 
 
 def _es_ajax() -> bool:

@@ -350,9 +350,10 @@ CREATE INDEX IF NOT EXISTS idx_matches_sku ON matches_aprendidos(sku_sams);
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS usuarios (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    username       TEXT    UNIQUE NOT NULL,              -- 'turi' | 'gabriel'
+    username       TEXT    UNIQUE NOT NULL,              -- 'turi' | 'gabriel' | 'empleado'
     password_hash  TEXT    NOT NULL,
-    nombre_display TEXT    NOT NULL,                     -- 'Turi' | 'Gabriel'
+    nombre_display TEXT    NOT NULL,                     -- 'Turi' | 'Gabriel' | 'Mostrador'
+    rol            TEXT    NOT NULL DEFAULT 'admin',     -- 'admin' | 'empleado'
     activo         INTEGER NOT NULL DEFAULT 1            -- boolean
 );
 

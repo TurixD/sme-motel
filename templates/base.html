@@ -33,42 +33,22 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
                         {{ admin_nombre }}
                     </span>
-                    <button class="modo-btn" id="btn-modo-empleado" type="button">
-                        Modo empleado
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><polyline points="9 18 15 12 9 6"/></svg>
-                    </button>
                     {% else %}
                     <span class="modo-badge modo-badge--empleado">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        Empleado
+                        {{ usuario_nombre or 'Mostrador' }}
                     </span>
-                    <a href="/login" class="modo-btn modo-btn--login">
-                        Iniciar sesión
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><polyline points="9 18 15 12 9 6"/></svg>
-                    </a>
                     {% endif %}
+                    <button class="modo-btn" id="btn-logout" type="button">
+                        Cerrar sesión
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    </button>
                 </div>
             </div>
         </header>
 
-        <!-- Formulario oculto para POST /logout (toggle a modo empleado) -->
+        <!-- Formulario oculto para POST /logout -->
         <form id="form-logout" action="/logout" method="POST" style="display:none"></form>
-
-        <!-- Modal confirmación: admin → empleado -->
-        <div class="modal-overlay" id="modal-modo-empleado" hidden>
-            <div class="modal-card">
-                <h3 class="modal-card__title">Activar modo empleado</h3>
-                <p class="modal-card__body">
-                    Los menús de gastos, fondos, reportes y configuración
-                    quedarán ocultos. Cualquier admin puede desbloquear
-                    con su contraseña.
-                </p>
-                <div class="modal-card__actions">
-                    <button class="btn btn--ghost" id="btn-modal-cancelar" type="button">Cancelar</button>
-                    <button class="btn btn--primary" id="btn-modal-confirmar" type="button">Confirmar</button>
-                </div>
-            </div>
-        </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
@@ -139,23 +119,11 @@
 
     <script>
     (function () {
-        var btnModo    = document.getElementById('btn-modo-empleado');
-        var overlay    = document.getElementById('modal-modo-empleado');
-        var btnCancel  = document.getElementById('btn-modal-cancelar');
-        var btnConfirm = document.getElementById('btn-modal-confirmar');
+        var btnLogout  = document.getElementById('btn-logout');
         var formLogout = document.getElementById('form-logout');
-        if (!btnModo) return;
-        btnModo.addEventListener('click', function () {
-            overlay.hidden = false;
-        });
-        btnCancel.addEventListener('click', function () {
-            overlay.hidden = true;
-        });
-        overlay.addEventListener('click', function (e) {
-            if (e.target === overlay) overlay.hidden = true;
-        });
-        btnConfirm.addEventListener('click', function () {
-            formLogout.submit();
+        if (!btnLogout || !formLogout) return;
+        btnLogout.addEventListener('click', function () {
+            if (confirm('¿Cerrar sesión?')) formLogout.submit();
         });
     })();
     </script>

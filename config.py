@@ -3,6 +3,7 @@ config.py - Configuracion central de SME. Lee variables desde .env.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,6 +22,13 @@ class Config:
     HOST = os.getenv("FLASK_HOST", "0.0.0.0")
     PORT = int(os.getenv("FLASK_PORT") or 5050)
     DEBUG = ENV == "development"
+
+    # --- Sesión / cookies (auth por dispositivo) ---
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    # Activar SESSION_COOKIE_SECURE=true en .env cuando se sirva por HTTPS (remoto)
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)
 
     # --- Claude / Anthropic ---
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

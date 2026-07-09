@@ -281,17 +281,40 @@ def migrar() -> None:
                     username       TEXT    UNIQUE NOT NULL,
                     password_hash  TEXT    NOT NULL,
                     nombre_display TEXT    NOT NULL,
+                    rol            TEXT    NOT NULL DEFAULT 'admin',   -- 'admin' | 'empleado'
                     activo         INTEGER NOT NULL DEFAULT 1
                 )
             """)
             for uname, display in [("turi", "Turi"), ("gabriel", "Gabriel")]:
                 conn.execute(
                     "INSERT OR IGNORE INTO usuarios "
-                    "(username, password_hash, nombre_display) VALUES (?,?,?)",
+                    "(username, password_hash, nombre_display, rol) VALUES (?,?,?,'admin')",
                     (uname, generate_password_hash("cambiar123"), display),
                 )
+            conn.execute(
+                "INSERT OR IGNORE INTO usuarios "
+                "(username, password_hash, nombre_display, rol) VALUES (?,?,?,'empleado')",
+                ("empleado", generate_password_hash("mostrador123"), "Mostrador"),
+            )
             migraciones += 1
-            print("  usuarios: tabla creada con 2 admins (pass inicial: cambiar123)")
+            print("  usuarios: tabla creada (2 admins + mostrador; pass inicial cambiar123 / mostrador123)")
+
+        # v2.5 — usuarios.rol + usuario de mostrador (login para todos, incl. empleados)
+        if "usuarios" in {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
+            cols_u = {r[1] for r in conn.execute("PRAGMA table_info(usuarios)").fetchall()}
+            if "rol" not in cols_u:
+                conn.execute("ALTER TABLE usuarios ADD COLUMN rol TEXT NOT NULL DEFAULT 'admin'")
+                conn.execute("UPDATE usuarios SET rol='admin' WHERE username IN ('turi','gabriel')")
+                migraciones += 1
+                print("  usuarios: columna 'rol' agregada (turi/gabriel=admin) (v2.5)")
+            if not conn.execute("SELECT 1 FROM usuarios WHERE username='empleado'").fetchone():
+                conn.execute(
+                    "INSERT INTO usuarios (username, password_hash, nombre_display, rol) VALUES (?,?,?,'empleado')",
+                    ("empleado", generate_password_hash("mostrador123"), "Mostrador"),
+                )
+                migraciones += 1
+                print("  usuarios: usuario 'empleado' (Mostrador) creado, rol=empleado, pass 'mostrador123' (v2.5)")
 
         # v2.0 — clave modo_actual en configuracion
         existe_modo = conn.execute(
