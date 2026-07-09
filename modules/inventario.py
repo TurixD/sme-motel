@@ -319,30 +319,51 @@ def vista_conteo():
 
 @inventario_bp.route("/inventario/conteo", methods=["POST"])
 def guardar_conteo():
-    data = request.get_json(force=True)
+    data = request.get_json(silent=True) or {}
     items = data.get("items", [])
     notas_globales = (data.get("notas") or "").strip() or None
     fecha = data.get("fecha") or date.today().isoformat()
 
     if not items:
         return jsonify({"ok": False, "error": "Sin items"}), 400
-
-    errores = []
-    for item in items:
-        try:
-            if float(item.get("cantidad", -1)) < 0:
-                errores.append(f"Cantidad negativa para producto {item.get('id')}")
-        except (TypeError, ValueError):
-            errores.append(f"Cantidad inválida para producto {item.get('id')}")
-    if errores:
-        return jsonify({"ok": False, "error": "; ".join(errores)}), 400
+    try:
+        date.fromisoformat(fecha)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Fecha inválida"}), 400
 
     diferencias = 0
     with _db() as conn:
+        validos = {r["id"] for r in conn.execute("SELECT id FROM inventario WHERE activo=1").fetchall()}
+
+        # Validar todos los items antes de escribir nada
+        errores = []
+        limpios = []
         for item in items:
-            pid    = int(item["id"])
-            cant   = float(item["cantidad"])
-            esp    = float(item.get("esperado", 0) or 0)
+            try:
+                pid = int(item["id"])
+            except (KeyError, TypeError, ValueError):
+                errores.append(f"Producto inválido: {item.get('id')}")
+                continue
+            if pid not in validos:
+                errores.append(f"Producto inexistente: {pid}")
+                continue
+            try:
+                cant = float(item["cantidad"])
+            except (KeyError, TypeError, ValueError):
+                errores.append(f"Cantidad inválida para producto {pid}")
+                continue
+            if cant < 0:
+                errores.append(f"Cantidad negativa para producto {pid}")
+                continue
+            try:
+                esp = float(item.get("esperado", 0) or 0)
+            except (TypeError, ValueError):
+                esp = 0.0
+            limpios.append((pid, cant, esp))
+        if errores:
+            return jsonify({"ok": False, "error": "; ".join(errores)}), 400
+
+        for pid, cant, esp in limpios:
             diff   = abs(cant - esp)
             if esp > 0 and (diff / esp >= _UMBRAL_DIFERENCIA_PCT or diff >= _UMBRAL_DIFERENCIA_ABS):
                 diferencias += 1

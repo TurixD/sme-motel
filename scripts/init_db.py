@@ -37,6 +37,7 @@ def crear_bd(reset: bool = False) -> None:
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA journal_mode = WAL;")  # mejor concurrencia entre puertos
         conn.executescript(schema_sql)
         conn.commit()
 
@@ -132,6 +133,10 @@ def migrar() -> None:
 
     conn = sqlite3.connect(DB_PATH)
     try:
+        # WAL: mejor concurrencia con varios puertos leyendo/escribiendo a la vez
+        modo_wal = conn.execute("PRAGMA journal_mode = WAL;").fetchone()[0]
+        print(f"  journal_mode = {modo_wal}")
+
         columnas = {row[1] for row in conn.execute("PRAGMA table_info(uso_ia)").fetchall()}
         migraciones = 0
         if "exito" not in columnas:

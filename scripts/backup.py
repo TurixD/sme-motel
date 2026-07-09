@@ -11,7 +11,7 @@ Para programar en Windows Task Scheduler:
     (Usa la ruta completa o configura la variable PATH)
 """
 
-import shutil
+import sqlite3
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -34,7 +34,18 @@ def make_backup() -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = BACKUPS_DIR / f"sme_{timestamp}.db"
 
-    shutil.copy2(DB_PATH, dest)
+    # API de backup de SQLite: consistente aunque la BD esté en uso o en modo WAL
+    # (a diferencia de copiar el archivo, que puede quedar a medias).
+    src = sqlite3.connect(DB_PATH)
+    try:
+        dst = sqlite3.connect(dest)
+        try:
+            with dst:
+                src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
     size_kb = dest.stat().st_size // 1024
     print(f"[OK] Respaldo creado: {dest.name} ({size_kb} KB)")
     return dest
