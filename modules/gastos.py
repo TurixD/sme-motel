@@ -18,6 +18,7 @@ from ai.claude_client import call_claude
 from config import Config
 from logger import get_logger, log_action
 from modules.auth import solo_admin
+from modules.validacion import fecha_ok, parse_monto
 
 gastos_bp = Blueprint("gastos", __name__)
 _log = get_logger()
@@ -239,15 +240,17 @@ def registrar():
     data            = request.get_json(silent=True) or {}
     fecha           = data.get("fecha") or date.today().isoformat()
     categoria       = (data.get("categoria") or "").strip()
-    monto           = float(data.get("monto", 0) or 0)
+    monto, err      = parse_monto(data.get("monto"), mayor_a_cero=True)
     descripcion     = (data.get("descripcion") or "").strip()
     descontar_fondo = bool(data.get("descontar_fondo", False))
     recibo_id       = data.get("recibo_id")
 
+    if err:
+        return jsonify({"error": err}), 400
+    if not fecha_ok(fecha):
+        return jsonify({"error": "Fecha inválida"}), 400
     if categoria not in CATEGORIAS:
         return jsonify({"error": "Categoría inválida"}), 400
-    if monto <= 0:
-        return jsonify({"error": "El monto debe ser mayor a cero"}), 400
 
     with _db() as db:
         cur = db.execute(
@@ -451,7 +454,7 @@ def subir_recibo():
         return jsonify({"ok": False, "error": "No se recibió ninguna imagen"}), 400
 
     archivo = request.files["imagen"]
-    if not archivo.content_type.startswith("image/"):
+    if not (archivo.content_type or "").startswith("image/"):
         return jsonify({"ok": False, "error": "El archivo no es una imagen válida"}), 400
 
     data_bytes = archivo.read()
@@ -703,13 +706,15 @@ def editar(gasto_id):
     data        = request.get_json(silent=True) or {}
     fecha       = (data.get("fecha") or "").strip()
     categoria   = (data.get("categoria") or "").strip()
-    monto       = float(data.get("monto", 0) or 0)
+    monto, err  = parse_monto(data.get("monto"), mayor_a_cero=True)
     descripcion = (data.get("descripcion") or "").strip()
 
+    if err:
+        return jsonify({"error": err}), 400
+    if not fecha_ok(fecha):
+        return jsonify({"error": "Fecha inválida"}), 400
     if categoria not in CATEGORIAS:
         return jsonify({"error": "Categoría inválida"}), 400
-    if monto <= 0:
-        return jsonify({"error": "El monto debe ser mayor a cero"}), 400
 
     with _db() as db:
         anterior = db.execute(

@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, render_template, request
 from config import Config
 from logger import get_logger, log_action
 from modules.auth import solo_admin
+from modules.validacion import fecha_ok
 
 empleados_bp = Blueprint("empleados", __name__)
 _log = get_logger()
@@ -256,6 +257,8 @@ def asignar():
 
     if not fecha or not turno_id or not emp_id:
         return jsonify({"error": "Faltan parámetros"}), 400
+    if not fecha_ok(fecha):
+        return jsonify({"error": "Fecha inválida"}), 400
 
     with _db() as db:
         # Idempotencia: mismo empleado+turno+día no se duplica
@@ -281,22 +284,28 @@ def asignar():
         sueldo     = float(turno["sueldo"])
         emp_nombre = emp["nombre"]
 
-        cur = db.execute(
-            """INSERT INTO asignaciones_turnos
-               (fecha, empleado_id, turno_id, es_doble_turno, notas, creado_en)
-               VALUES (?, ?, ?, 0, ?, datetime('now','localtime'))""",
-            (fecha, emp_id, turno_id, notas),
-        )
-        asig_id = cur.lastrowid
-        db.execute(
-            """INSERT INTO pagos_empleados
-               (asignacion_turno_id, empleado_id, fecha, monto, pagado, creado_en)
-               VALUES (?, ?, ?, ?, 1, datetime('now','localtime'))""",
-            (asig_id, emp_id, fecha, sueldo),
-        )
-        desc = f"Asignado: {t_label} {fecha} → {emp_nombre}"
-        _bitacora(db, fecha, desc)
-        db.commit()
+        try:
+            cur = db.execute(
+                """INSERT INTO asignaciones_turnos
+                   (fecha, empleado_id, turno_id, es_doble_turno, notas, creado_en)
+                   VALUES (?, ?, ?, 0, ?, datetime('now','localtime'))""",
+                (fecha, emp_id, turno_id, notas),
+            )
+            asig_id = cur.lastrowid
+            db.execute(
+                """INSERT INTO pagos_empleados
+                   (asignacion_turno_id, empleado_id, fecha, monto, pagado, creado_en)
+                   VALUES (?, ?, ?, ?, 1, datetime('now','localtime'))""",
+                (asig_id, emp_id, fecha, sueldo),
+            )
+            desc = f"Asignado: {t_label} {fecha} → {emp_nombre}"
+            _bitacora(db, fecha, desc)
+            db.commit()
+        except sqlite3.IntegrityError:
+            # Carrera: otra request insertó el mismo empleado+turno+día entre el
+            # chequeo de duplicado y el INSERT (UNIQUE fecha,turno_id,empleado_id).
+            db.rollback()
+            return jsonify({"error": "Este empleado ya está asignado a este turno ese día"}), 400
         log_action("%s", desc)
 
     color = _color({"color_calendario": emp["color_calendario"], "es_socio": emp["es_socio"]})
