@@ -16,6 +16,7 @@ from flask import Blueprint, jsonify, render_template, request
 from config import Config
 from logger import log_action
 from modules.auth import _get_modo, solo_admin
+from modules.tiempo import dia_operativo
 
 cortes_bp = Blueprint("cortes", __name__)
 
@@ -227,24 +228,25 @@ def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
 
 @cortes_bp.route("/cortes")
 def index():
-    hoy      = date.today().isoformat()
     modo     = _get_modo()
     es_admin = modo.startswith("admin_")
 
-    # Noche declarada en ventana matutina (07-08h) corresponde al día anterior
-    hora_actual = datetime.now().hour
-    fecha_noche = (date.today() - timedelta(days=1)).isoformat() if 7 <= hora_actual <= 8 else hoy
+    # Los tres turnos pertenecen al MISMO día operativo (08:00–08:00). Entre
+    # 00:00 y 07:59 aún es el día operativo anterior, así que la página muestra
+    # y declara los cortes de ese día (incluida la noche que se está trabajando).
+    op       = dia_operativo()
+    hoy      = op.isoformat()          # día operativo (etiqueta + fecha de manana/tarde)
+    fecha_noche = hoy                   # la noche pertenece al mismo día operativo
 
     with _db() as conn:
-        # Cargar manana+tarde para HOY, noche para fecha_noche
+        # Cargar los tres turnos del día operativo
         cortes_rows = conn.execute(
             """SELECT ct.*, e.nombre AS emp_nombre
                FROM cortes_turno ct
                LEFT JOIN empleados e ON e.id = ct.empleado_id
-               WHERE (ct.fecha = ? AND ct.turno IN ('manana', 'tarde'))
-                  OR (ct.fecha = ? AND ct.turno = 'noche')
+               WHERE ct.fecha = ?
                ORDER BY CASE ct.turno WHEN 'manana' THEN 1 WHEN 'tarde' THEN 2 ELSE 3 END""",
-            (hoy, fecha_noche),
+            (hoy,),
         ).fetchall()
         cortes_hoy = {c["turno"]: dict(c) for c in cortes_rows}
 
@@ -360,7 +362,7 @@ def api_calcular_bruto(turno, fecha):
 def api_declarar():
     data            = request.get_json(silent=True) or {}
     turno           = (data.get("turno") or "").strip()
-    fecha           = data.get("fecha") or date.today().isoformat()
+    fecha           = data.get("fecha") or dia_operativo().isoformat()
     empleado_id     = data.get("empleado_id")
     bruto_declarado = data.get("bruto_declarado")
     declarado_por   = (data.get("declarado_por_nombre") or "").strip()

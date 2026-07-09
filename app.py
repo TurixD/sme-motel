@@ -26,6 +26,7 @@ from modules.gastos import gastos_bp
 from modules.inventario import inventario_bp
 from modules.ingresos import ingresos_bp
 from modules.reportes import reportes_bp
+from modules.tiempo import dia_operativo
 
 _DIAS_HEADER = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
 _DIAS_SHORT  = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
@@ -131,9 +132,12 @@ def _dash_data(db_path: str) -> dict:
         _auto_renta_semanal(conn)
 
         # --- Tarjetas del día ---
+        # El ingreso se registra por día operativo (los cortes lo escriben bajo
+        # esa fecha), así que "hoy" usa el día operativo, no el de calendario.
+        op_hoy = dia_operativo().isoformat()
         ing_dia = float(conn.execute(
             "SELECT COALESCE(SUM(total_neto),0) AS t FROM ingresos_diarios WHERE fecha=?",
-            (hoy.isoformat(),)
+            (op_hoy,)
         ).fetchone()["t"])
         gas_dia = float(conn.execute(
             "SELECT COALESCE(SUM(monto),0) AS t FROM gastos_extras WHERE fecha=?",

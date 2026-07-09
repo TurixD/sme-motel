@@ -13,6 +13,7 @@ from flask import Blueprint, Response, jsonify, render_template, request
 from config import Config
 from logger import get_logger, log_action
 from modules.auth import solo_admin
+from modules.tiempo import dia_operativo
 
 ingresos_bp = Blueprint("ingresos", __name__)
 _log = get_logger()
@@ -39,7 +40,9 @@ def _calcular(efectivo: float, tarjeta: float, transferencia: float) -> tuple[fl
 @ingresos_bp.route("/ingresos")
 @solo_admin
 def index():
-    hoy         = date.today().isoformat()
+    # "hoy" = día operativo (los ingresos por cortes se registran bajo esa
+    # fecha), para que el resumen no se reinicie a medianoche.
+    hoy         = dia_operativo().isoformat()
     fecha_desde = request.args.get("desde", "")
     fecha_hasta = request.args.get("hasta", "")
 
@@ -91,7 +94,7 @@ def index():
 @solo_admin
 def registrar():
     data    = request.get_json(silent=True) or {}
-    fecha   = data.get("fecha") or date.today().isoformat()
+    fecha   = data.get("fecha") or dia_operativo().isoformat()
     efect   = float(data.get("monto_efectivo", 0) or 0)
     tarj    = float(data.get("monto_tarjeta",  0) or 0)
     transf  = float(data.get("monto_transferencia", 0) or 0)
