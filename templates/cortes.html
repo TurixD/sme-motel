@@ -60,6 +60,10 @@
         {% else %}
         <div class="corte-card__body corte-card__body--empty">
             <p class="corte-card__empty-text">Aún no declarado</p>
+            {% set n_rentas = rentas_por_turno.get(turno_key, 0) %}
+            {% if n_rentas > 0 %}
+            <p class="corte-card__pendiente-aviso">⚠ {{ n_rentas }} cuarto{{ 's' if n_rentas != 1 }} registrado{{ 's' if n_rentas != 1 }} sin declarar</p>
+            {% endif %}
         </div>
         {% endif %}
 

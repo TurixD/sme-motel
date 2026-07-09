@@ -250,6 +250,12 @@ def index():
         ).fetchall()
         cortes_hoy = {c["turno"]: dict(c) for c in cortes_rows}
 
+        # Cuartos registrados por turno (para avisar de turnos con cuartos sin declarar)
+        rentas_por_turno = {
+            t: _calcular_bruto(conn, t, hoy)["count_rentas"]
+            for t in ("manana", "tarde", "noche")
+        }
+
         # Empleados activos + sueldo del turno que trabajan (por turno_default)
         turnos_sueldos = {
             r["nombre"]: float(r["sueldo"])
@@ -321,6 +327,7 @@ def index():
         fecha_noche=fecha_noche,
         es_admin=es_admin,
         cortes_hoy=cortes_hoy,
+        rentas_por_turno=rentas_por_turno,
         empleados=empleados,
         asignaciones_hoy=asignaciones_hoy,
         admin_nombres=admin_nombres,

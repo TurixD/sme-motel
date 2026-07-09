@@ -77,6 +77,13 @@
     font-style: italic;
 }
 
+.corte-card__pendiente-aviso {
+    margin-top: var(--space-2);
+    color: var(--status-warning);
+    font-size: var(--text-xs);
+    font-weight: 600;
+}
+
 .corte-card__monto {
     font-family: var(--font-mono);
     font-size: var(--text-2xl);

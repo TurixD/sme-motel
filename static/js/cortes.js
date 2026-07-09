@@ -195,7 +195,10 @@
                     decCalc = d;
                     decBrutoCalc.textContent = fmt(d.bruto_calculado);
                     if (!decBruto.value) {
-                        decBruto.value = (d.bruto_calculado || 0).toFixed(2);
+                        // El efectivo contado no puede ser negativo (día flojo donde
+                        // los sueldos superan a los cuartos): precarga en 0, el
+                        // desglose sigue mostrando el esperado real.
+                        decBruto.value = Math.max(0, d.bruto_calculado || 0).toFixed(2);
                     }
                     actualizarInfoSueldos();
                 } else {
