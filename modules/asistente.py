@@ -40,9 +40,47 @@ _TABLAS_WHITELIST = {
 }
 
 _RE_ESCRITURA = re.compile(
-    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|TRUNCATE)\b",
+    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|TRUNCATE|ATTACH|DETACH|PRAGMA|VACUUM)\b",
     re.IGNORECASE,
 )
+# Bloquea lecturas de datos sensibles (hashes de contraseña) hacia el modelo
+_RE_SENSIBLE = re.compile(r"\b(usuarios|password_hash|password)\b", re.IGNORECASE)
+# Operaciones nunca permitidas dentro de un cambio de escritura propuesto
+_RE_PELIGRO_SQL = re.compile(
+    r"\b(ATTACH|DETACH|PRAGMA|DROP|ALTER|CREATE|VACUUM|TRUNCATE|REPLACE)\b",
+    re.IGNORECASE,
+)
+
+
+def _tiene_multiples_sentencias(sql: str) -> bool:
+    """True si hay un ';' que no sea el final (evita stacked queries)."""
+    return ";" in sql.strip().rstrip(";")
+
+
+def _validar_sql_cambio(sql: str):
+    """
+    Valida el SQL de un cambio de escritura. Deriva la tabla y el tipo del SQL
+    REAL (no de lo que declare el modelo), exige que la tabla esté en la
+    whitelist, prohíbe UPDATE/DELETE sin WHERE y solo permite una sentencia.
+    Devuelve (ok, error, tabla, tipo).
+    """
+    s = (sql or "").strip()
+    if not s:
+        return False, "SQL vacío.", None, None
+    if _tiene_multiples_sentencias(s):
+        return False, "Solo se permite una sentencia SQL.", None, None
+    if _RE_PELIGRO_SQL.search(s):
+        return False, "El SQL contiene operaciones no permitidas.", None, None
+    m = re.match(r"^\s*(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+[\"'`\[]?(\w+)", s, re.IGNORECASE)
+    if not m:
+        return False, "El SQL debe ser INSERT INTO / UPDATE / DELETE FROM sobre una tabla permitida.", None, None
+    tipo  = m.group(1).split()[0].upper()          # INSERT | UPDATE | DELETE
+    tabla = m.group(2).lower()
+    if tabla not in _TABLAS_WHITELIST:
+        return False, f"Tabla '{tabla}' no está permitida para escritura.", None, None
+    if tipo in ("UPDATE", "DELETE") and not re.search(r"\bWHERE\b", s, re.IGNORECASE):
+        return False, f"{tipo} sin WHERE no permitido (afectaría toda la tabla).", None, None
+    return True, None, tabla, tipo
 
 _SYSTEM_PROMPT = """Eres el asistente IA del SME (Software de Manejo de Estrés), sistema interno de un motel en Aguascalientes, México. El usuario es Turi, dueño junto con su socio Gabriel (utilidades 50/50). El motel tiene 9 empleados en 3 turnos (mañana 08-16, tarde 16-23, noche 23-08). Hablas español mexicano informal pero profesional, directo y honesto. NO usas emojis salvo que sean útiles.
 
@@ -243,6 +281,10 @@ def _tool_ejecutar_sql(_input):
         return {"ok": False, "error": "Query vacía"}
     if _RE_ESCRITURA.search(query):
         return {"ok": False, "error": "La query contiene operaciones no permitidas. Solo SELECT."}
+    if _tiene_multiples_sentencias(query):
+        return {"ok": False, "error": "Solo una sentencia SELECT a la vez."}
+    if _RE_SENSIBLE.search(query):
+        return {"ok": False, "error": "Consulta bloqueada: incluye datos sensibles (usuarios/contraseñas)."}
     conn = _db()
     try:
         cur = conn.execute(query)
@@ -261,14 +303,14 @@ def _tool_proponer_cambio(_input, sesion_id):
     tabla = (_input.get("tabla") or "").strip().lower()
     tipo = (_input.get("tipo") or "").strip().upper()
 
-    if not all([sql, desc, tabla, tipo]):
-        return {"ok": False, "error": "Faltan parámetros requeridos (sql, descripcion_humana, tabla, tipo)"}
-    if tabla not in _TABLAS_WHITELIST:
-        return {"ok": False, "error": f"Tabla '{tabla}' no está permitida para escritura"}
-    if tipo not in ("INSERT", "UPDATE", "DELETE"):
-        return {"ok": False, "error": f"Tipo '{tipo}' no válido. Debe ser INSERT, UPDATE o DELETE"}
-    if not re.match(rf"^\s*{tipo}\b", sql, re.IGNORECASE):
-        return {"ok": False, "error": f"El SQL no comienza con {tipo}"}
+    if not all([sql, desc]):
+        return {"ok": False, "error": "Faltan parámetros requeridos (sql, descripcion_humana)"}
+
+    # La tabla y el tipo se derivan del SQL REAL (no de lo que declare el modelo),
+    # se exige tabla en whitelist y WHERE en UPDATE/DELETE.
+    ok, error, tabla, tipo = _validar_sql_cambio(sql)
+    if not ok:
+        return {"ok": False, "error": error}
 
     conn = _db()
     try:
@@ -478,6 +520,18 @@ def api_ejecutar_cambio(cambio_id):
         ).fetchone()
         if not cambio:
             return jsonify({"ok": False, "error": "Cambio no encontrado o ya procesado"}), 404
+
+        # Defensa en profundidad: re-validar el SQL antes de ejecutarlo
+        ok_val, err_val, _, _ = _validar_sql_cambio(cambio["sql"])
+        if not ok_val:
+            conn.execute(
+                "UPDATE cambios_pendientes SET estado='cancelado', "
+                "fecha_resolucion=datetime('now','localtime') WHERE id=?",
+                (cambio_id,),
+            )
+            conn.commit()
+            log_action("Asistente cambio_id=%d BLOQUEADO por validación: %s", cambio_id, err_val)
+            return jsonify({"ok": False, "error": f"Cambio bloqueado: {err_val}"}), 400
 
         try:
             cur = conn.execute(cambio["sql"])
