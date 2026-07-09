@@ -50,28 +50,37 @@ def _db():
 # ── Cálculo de bruto ──────────────────────────────────────────
 
 def _calcular_bruto(conn, turno: str, fecha: str) -> dict:
-    """Suma rentas activas del sistema para la franja del turno."""
+    """
+    Suma rentas activas del sistema para la franja del turno, separando el
+    efectivo (entra a caja) del pago con tarjeta (va al banco, no a caja).
+    """
+    _SEL = """SELECT COALESCE(SUM(precio_cobrado), 0) AS bruto,
+                     COALESCE(SUM(CASE WHEN es_tarjeta = 1 THEN precio_cobrado ELSE 0 END), 0) AS tarjeta,
+                     COUNT(*) AS cnt
+              FROM rentas WHERE """
     if turno in ("manana", "tarde"):
         row = conn.execute(
-            """SELECT COALESCE(SUM(precio_cobrado), 0) AS bruto, COUNT(*) AS cnt
-               FROM rentas
-               WHERE fecha = ? AND hora_registro BETWEEN ? AND ?
-                 AND estado = 'activo'""",
+            _SEL + """fecha = ? AND hora_registro BETWEEN ? AND ? AND estado = 'activo'""",
             (fecha, _FRANJA_INICIO[turno], _FRANJA_FIN[turno]),
         ).fetchone()
     else:  # noche: 23:00–07:59, cruza la medianoche
         fecha_sig = (date.fromisoformat(fecha) + timedelta(days=1)).isoformat()
         row = conn.execute(
-            """SELECT COALESCE(SUM(precio_cobrado), 0) AS bruto, COUNT(*) AS cnt
-               FROM rentas
-               WHERE (
+            _SEL + """(
                    (fecha = ? AND hora_registro >= '23:00:00')
                    OR
                    (fecha = ? AND hora_registro < '08:00:00')
                ) AND estado = 'activo'""",
             (fecha, fecha_sig),
         ).fetchone()
-    return {"bruto": float(row["bruto"]), "count_rentas": int(row["cnt"])}
+    bruto   = float(row["bruto"])
+    tarjeta = float(row["tarjeta"])
+    return {
+        "bruto":          bruto,             # total cuartos (efectivo + tarjeta)
+        "bruto_tarjeta":  tarjeta,           # porción pagada con tarjeta
+        "bruto_efectivo": bruto - tarjeta,   # porción en efectivo (lo que entra a caja)
+        "count_rentas":   int(row["cnt"]),
+    }
 
 
 def _sueldos_turno(conn, turno: str, fecha: str) -> dict:
@@ -107,12 +116,13 @@ def _calcular_corte(conn, turno: str, fecha: str) -> dict:
         s = _sueldos_turno(conn, "manana", fecha)
         return {
             "turno":             "manana",
-            "cuartos_turno":     r_manana["bruto"],
-            "cuartos_acumulado": r_manana["bruto"],
+            "cuartos_turno":     r_manana["bruto_efectivo"],
+            "cuartos_acumulado": r_manana["bruto_efectivo"],
+            "cuartos_tarjeta":   r_manana["bruto_tarjeta"],
             "count_rentas":      r_manana["count_rentas"],
             "sueldos":           s["sueldos"],
             "empleados":         s["empleados"],
-            "neto":              r_manana["bruto"] - s["sueldos"],
+            "neto":              r_manana["bruto_efectivo"] - s["sueldos"],
         }
 
     if turno == "tarde":
@@ -120,12 +130,13 @@ def _calcular_corte(conn, turno: str, fecha: str) -> dict:
         s_m = _sueldos_turno(conn, "manana", fecha)["sueldos"]
         s_t = _sueldos_turno(conn, "tarde",  fecha)["sueldos"]
         s_n = _sueldos_turno(conn, "noche",  fecha)["sueldos"]
-        acumulado = r_manana["bruto"] + r_tarde["bruto"]
+        acumulado = r_manana["bruto_efectivo"] + r_tarde["bruto_efectivo"]
         sueldos   = s_m + s_t + s_n
         return {
             "turno":             "tarde",
-            "cuartos_turno":     r_tarde["bruto"],
+            "cuartos_turno":     r_tarde["bruto_efectivo"],
             "cuartos_acumulado": acumulado,
+            "cuartos_tarjeta":   r_manana["bruto_tarjeta"] + r_tarde["bruto_tarjeta"],
             "count_rentas":      r_tarde["count_rentas"],
             "sueldos":           sueldos,
             "empleados":         None,
@@ -136,12 +147,13 @@ def _calcular_corte(conn, turno: str, fecha: str) -> dict:
     r_noche = _calcular_bruto(conn, "noche", fecha)
     return {
         "turno":             "noche",
-        "cuartos_turno":     r_noche["bruto"],
-        "cuartos_acumulado": r_noche["bruto"],
+        "cuartos_turno":     r_noche["bruto_efectivo"],
+        "cuartos_acumulado": r_noche["bruto_efectivo"],
+        "cuartos_tarjeta":   r_noche["bruto_tarjeta"],
         "count_rentas":      r_noche["count_rentas"],
         "sueldos":           0.0,
         "empleados":         0,
-        "neto":              r_noche["bruto"],
+        "neto":              r_noche["bruto_efectivo"],
     }
 
 
@@ -154,6 +166,11 @@ def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
     efectivo se recoge a las 11pm y a las 8am. Por eso el total del día NO suma
     los tres cortes (duplicaría la mañana): usa el corte de la tarde —o el de
     la mañana si aún no hay tarde— más el de la noche.
+
+    El efectivo sale de lo declarado en los cortes (lo contado en caja). La
+    TARJETA se calcula aparte, de las rentas marcadas como tarjeta en el día
+    operativo (no entra a caja), y la transferencia manual se preserva. Así los
+    cortes ya no borran los pagos con tarjeta/transferencia.
     """
 
     cortes = {
@@ -166,32 +183,44 @@ def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
     }
     pickup_dia   = cortes.get("tarde", cortes.get("manana", 0.0))  # 11pm (tarde incluye mañana)
     pickup_noche = cortes.get("noche", 0.0)                        # 8am
-    bruto_total  = pickup_dia + pickup_noche
-    notas_sync   = "Generado desde cortes de turno v2.5"
+    efectivo     = pickup_dia + pickup_noche
+
+    # Tarjeta del día operativo (suma de las 3 franjas: noche cruza la medianoche)
+    tarjeta = sum(
+        _calcular_bruto(conn, t, fecha)["bruto_tarjeta"]
+        for t in ("manana", "tarde", "noche")
+    )
+    notas_sync = "Generado desde cortes de turno v2.5"
 
     existente = conn.execute(
-        "SELECT id FROM ingresos_diarios WHERE fecha = ?", (fecha,)
+        "SELECT id, monto_transferencia FROM ingresos_diarios WHERE fecha = ?", (fecha,)
     ).fetchone()
+    transferencia = float(existente["monto_transferencia"]) if existente else 0.0
+    comision   = round(tarjeta * 0.04, 2)
+    total_neto = round(efectivo + tarjeta + transferencia - comision, 2)
+
     if existente:
         conn.execute(
             """UPDATE ingresos_diarios
-               SET monto_efectivo=?, monto_tarjeta=0, monto_transferencia=0,
-                   comision_tarjeta=0, total_neto=?, notas=?
+               SET monto_efectivo=?, monto_tarjeta=?, monto_transferencia=?,
+                   comision_tarjeta=?, total_neto=?, notas=?
                WHERE fecha=?""",
-            (bruto_total, bruto_total, notas_sync, fecha),
+            (efectivo, tarjeta, transferencia, comision, total_neto, notas_sync, fecha),
         )
-        log_action("ingresos_diarios ACTUALIZADO vía cortes de turno: fecha=%s bruto=%.2f", fecha, bruto_total)
+        log_action("ingresos_diarios ACTUALIZADO vía cortes: fecha=%s efec=%.2f tarj=%.2f total=%.2f",
+                   fecha, efectivo, tarjeta, total_neto)
     else:
         conn.execute(
             """INSERT INTO ingresos_diarios
                (fecha, monto_efectivo, monto_tarjeta, monto_transferencia,
                 comision_tarjeta, total_neto, notas, creado_en)
-               VALUES (?, ?, 0, 0, 0, ?, ?, datetime('now','localtime'))""",
-            (fecha, bruto_total, bruto_total, notas_sync),
+               VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))""",
+            (fecha, efectivo, tarjeta, transferencia, comision, total_neto, notas_sync),
         )
-        log_action("ingresos_diarios CREADO vía cortes de turno: fecha=%s bruto=%.2f", fecha, bruto_total)
+        log_action("ingresos_diarios CREADO vía cortes: fecha=%s efec=%.2f tarj=%.2f total=%.2f",
+                   fecha, efectivo, tarjeta, total_neto)
 
-    return {"ok": True, "bruto_total": bruto_total}
+    return {"ok": True, "efectivo": efectivo, "tarjeta": tarjeta, "total_neto": total_neto}
 
 
 # ── Vista principal ───────────────────────────────────────────
@@ -318,8 +347,9 @@ def api_calcular_bruto(turno, fecha):
             "ok":                True,
             "bruto_calculado":   r["neto"],            # monto esperado del corte (neto de sueldos)
             "count_rentas":      r["count_rentas"],
-            "cuartos_turno":     r["cuartos_turno"],   # cuartos solo de este turno
-            "cuartos_acumulado": r["cuartos_acumulado"],  # incluye la mañana en la tarde
+            "cuartos_turno":     r["cuartos_turno"],   # efectivo de este turno
+            "cuartos_acumulado": r["cuartos_acumulado"],  # efectivo acumulado (tarde incluye mañana)
+            "cuartos_tarjeta":   r["cuartos_tarjeta"], # pagos con tarjeta (no entran a caja)
             "sueldos":           r["sueldos"],         # sueldos descontados
         })
 

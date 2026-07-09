@@ -103,6 +103,9 @@
                     <span class="feed-item__desc">Cuarto {{ r.cuarto_id }} · {{ r.nombre_display }} · {{ r.duracion_horas }}h</span>
                     <span class="feed-item__monto">
                         {{ r.precio_cobrado | moneda }}
+                        {% if r.es_tarjeta %}
+                        <span class="feed-item__tarjeta" title="Pago con tarjeta">💳</span>
+                        {% endif %}
                         {% if r.editado %}
                         <span class="feed-item__editado" title="Precio original: {{ r.precio_default | moneda }}">⚠</span>
                         {% endif %}
@@ -149,6 +152,13 @@
         <div class="form-group">
             <label class="form-label" for="reg-precio">Precio cobrado</label>
             <input class="form-input" type="number" id="reg-precio" min="0" step="1" placeholder="0">
+        </div>
+
+        <div class="form-group">
+            <label class="check-line">
+                <input type="checkbox" id="reg-tarjeta">
+                <span>Pago con tarjeta <small>(no entra a caja)</small></span>
+            </label>
         </div>
 
         <div class="form-group">

@@ -142,12 +142,17 @@
         decInfoSueldo.textContent  = sueldos_ ? ('− ' + fmt(sueldos_)) : fmt(0);
         decInfoNeto.textContent    = fmt(esperado);
 
-        // Nota contextual + diferencia contra lo declarado
+        // Nota contextual + tarjeta + diferencia contra lo declarado
         var nota = '';
         if (decTurnoActual === 'tarde') {
             nota = 'Acumulado del día (incluye la mañana). Descuenta sueldos de mañana, tarde y noche.';
         } else if (decTurnoActual === 'noche') {
             nota = 'Noche 23:00–08:00, sin descontar sueldos.';
+        }
+        var tarjeta = decCalc.cuartos_tarjeta || 0;
+        if (tarjeta > 0) {
+            nota += (nota ? ' · ' : '') +
+                'Tarjeta (no entra a caja): ' + fmt(tarjeta);
         }
         var declarado = parseFloat(decBruto.value);
         if (!isNaN(declarado)) {

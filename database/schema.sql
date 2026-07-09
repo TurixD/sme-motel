@@ -389,6 +389,7 @@ CREATE TABLE IF NOT EXISTS rentas (
     motivo_cancelacion TEXT,
     editado            INTEGER NOT NULL DEFAULT 0,       -- boolean: precio_cobrado != precio_default
     editado_por        TEXT,                             -- quién hizo la última edición
+    es_tarjeta         INTEGER NOT NULL DEFAULT 0,       -- boolean: pago con tarjeta (no entra a caja)
     FOREIGN KEY (cuarto_id) REFERENCES cuartos(id)
 );
 

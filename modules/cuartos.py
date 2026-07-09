@@ -73,7 +73,7 @@ def _actividad_dia(conn, es_admin: bool) -> list[dict]:
         SELECT r.id, r.cuarto_id, r.fecha, r.hora_registro, r.duracion_horas,
                r.precio_default, r.precio_cobrado, r.notas, r.estado,
                r.registrado_por, r.cancelado_por, r.cancelado_at,
-               r.motivo_cancelacion, r.editado, r.editado_por,
+               r.motivo_cancelacion, r.editado, r.editado_por, r.es_tarjeta,
                c.nombre_display, c.tipo
         FROM rentas r
         JOIN cuartos c ON c.id = r.cuarto_id
@@ -91,6 +91,7 @@ def _actividad_dia(conn, es_admin: bool) -> list[dict]:
     for r in conn.execute(base, (fecha, fecha_sig)).fetchall():
         item = dict(r)
         item["editado"] = bool(item["editado"])
+        item["es_tarjeta"] = bool(item["es_tarjeta"])
         result.append(item)
     return result
 
@@ -151,6 +152,7 @@ def api_registrar():
     duracion      = data.get("duracion_horas")
     precio_cobrado = data.get("precio_cobrado")
     notas         = (data.get("notas") or "").strip() or None
+    es_tarjeta    = 1 if data.get("es_tarjeta") else 0
 
     if not isinstance(cuarto_id, int) or duracion not in _DURACIONES_VALIDAS:
         return jsonify({"ok": False, "error": "Datos inválidos"}), 400
@@ -174,8 +176,8 @@ def api_registrar():
         cur = conn.execute(
             """INSERT INTO rentas
                (cuarto_id, fecha, hora_registro, duracion_horas,
-                precio_default, precio_cobrado, notas, registrado_por, editado)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+                precio_default, precio_cobrado, notas, registrado_por, editado, es_tarjeta)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (cuarto_id,
              ahora.strftime("%Y-%m-%d"),
              ahora.strftime("%H:%M:%S"),
@@ -184,7 +186,8 @@ def api_registrar():
              precio_cobrado,
              notas,
              modo,
-             editado),
+             editado,
+             es_tarjeta),
         )
         conn.commit()
         renta_id = cur.lastrowid
@@ -239,6 +242,7 @@ def api_editar(renta_id: int):
     duracion       = data.get("duracion_horas")
     precio_cobrado = data.get("precio_cobrado")
     notas          = (data.get("notas") or "").strip() or None
+    es_tarjeta     = 1 if data.get("es_tarjeta") else 0
     modo           = _modo_actual()
     es_admin       = modo.startswith("admin_")
 
@@ -265,8 +269,8 @@ def api_editar(renta_id: int):
         editado    = 1 if abs(precio_cobrado - precio_def) > 0.001 else 0
 
         conn.execute(
-            "UPDATE rentas SET duracion_horas=?, precio_cobrado=?, notas=?, editado=?, editado_por=? WHERE id=?",
-            (duracion, precio_cobrado, notas, editado, modo, renta_id),
+            "UPDATE rentas SET duracion_horas=?, precio_cobrado=?, notas=?, editado=?, editado_por=?, es_tarjeta=? WHERE id=?",
+            (duracion, precio_cobrado, notas, editado, modo, es_tarjeta, renta_id),
         )
         conn.commit()
 

@@ -112,6 +112,9 @@
         const editBadge = item.editado
             ? `<span class="feed-item__editado" title="Precio original: ${formatPeso(item.precio_default)}">⚠</span>`
             : '';
+        const tarjetaBadge = item.es_tarjeta
+            ? '<span class="feed-item__tarjeta" title="Pago con tarjeta">💳</span>'
+            : '';
         const cancelBadge = cancelado
             ? '<span class="feed-item__badge-cancelado">Cancelado</span>'
             : '';
@@ -121,7 +124,7 @@
             <div class="feed-item__body">
                 <span class="feed-item__tipo">Renta</span>
                 <span class="feed-item__desc">Cuarto ${item.cuarto_id} · ${escapeHtml(item.nombre_display)} · ${item.duracion_horas}h</span>
-                <span class="feed-item__monto">${precio} ${editBadge}</span>
+                <span class="feed-item__monto">${precio} ${tarjetaBadge} ${editBadge}</span>
                 ${cancelBadge}
             </div>
         </div>`;
@@ -218,6 +221,7 @@
 
         document.getElementById('reg-precio').value = cuartoPrice(cuartoId, 6);
         document.getElementById('reg-notas').value  = '';
+        document.getElementById('reg-tarjeta').checked = false;
         document.getElementById('reg-error').hidden = true;
         document.getElementById('modal-registro').hidden = false;
     }
@@ -249,6 +253,7 @@
     async function submitRegistrar() {
         const precio = parseFloat(document.getElementById('reg-precio').value);
         const notas  = document.getElementById('reg-notas').value.trim();
+        const esTarjeta = document.getElementById('reg-tarjeta').checked;
         const errEl  = document.getElementById('reg-error');
 
         if (isNaN(precio) || precio < 0) {
@@ -270,6 +275,7 @@
                     duracion_horas: currentDuracion,
                     precio_cobrado: precio,
                     notas:          notas || null,
+                    es_tarjeta:     esTarjeta,
                 }),
             });
             const data = await res.json();
@@ -350,6 +356,7 @@
                 <div class="detalle-row"><span>Hora</span><span>${item.hora_registro.substring(0, 5)}</span></div>
                 <div class="detalle-row"><span>Duración</span><span>${item.duracion_horas}h</span></div>
                 <div class="detalle-row"><span>Precio</span><span>${formatPeso(item.precio_cobrado)}${editBadge}</span></div>
+                <div class="detalle-row"><span>Pago</span><span>${item.es_tarjeta ? '💳 Tarjeta' : 'Efectivo'}</span></div>
                 <div class="detalle-row"><span>Registrado por</span><span>${displayModo(item.registrado_por)}</span></div>
                 ${notasRow}
                 ${editadoPorRow}
@@ -447,6 +454,12 @@
                 <input class="form-input" type="number" id="edit-precio" min="0" step="1" value="${item.precio_cobrado}">
             </div>
             <div class="form-group">
+                <label class="check-line">
+                    <input type="checkbox" id="edit-tarjeta" ${item.es_tarjeta ? 'checked' : ''}>
+                    <span>Pago con tarjeta <small>(no entra a caja)</small></span>
+                </label>
+            </div>
+            <div class="form-group">
                 <label class="form-label" for="edit-notas">Notas</label>
                 <textarea class="form-input form-textarea" id="edit-notas" rows="2">${escapeHtml(item.notas || '')}</textarea>
             </div>
@@ -496,6 +509,7 @@
                         duracion_horas: editDur,
                         precio_cobrado: precio,
                         notas:          notas || null,
+                        es_tarjeta:     document.getElementById('edit-tarjeta').checked,
                     }),
                 });
                 const data = await res.json();

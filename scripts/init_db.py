@@ -311,6 +311,10 @@ def migrar() -> None:
                 conn.execute("ALTER TABLE rentas ADD COLUMN editado_por TEXT")
                 migraciones += 1
                 print("  rentas: columna 'editado_por' agregada (v2.1)")
+            if "es_tarjeta" not in cols_rentas:
+                conn.execute("ALTER TABLE rentas ADD COLUMN es_tarjeta INTEGER NOT NULL DEFAULT 0")
+                migraciones += 1
+                print("  rentas: columna 'es_tarjeta' agregada (v2.5)")
 
         # v2.1 — tabla cuartos (catálogo estático)
         tablas = {r[0] for r in conn.execute(
@@ -361,6 +365,7 @@ def migrar() -> None:
                     cancelado_at       TEXT,
                     motivo_cancelacion TEXT,
                     editado            INTEGER NOT NULL DEFAULT 0,
+                    es_tarjeta         INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY (cuarto_id) REFERENCES cuartos(id)
                 )
             """)
