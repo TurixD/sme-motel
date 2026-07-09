@@ -1,7 +1,9 @@
-/* cortes.js — Lógica de modales para /cortes (v2.3)
-   FIX1: dropdown cargado por JS según asignaciones del turno
-   FIX2: sueldo tarde usa empleados únicos (sin duplicar doble turno)
-   FIX3: ventanas horarias en UI (backend también las valida) */
+/* cortes.js — Lógica de modales para /cortes (v2.5)
+   - Dropdown de empleados cargado por JS según asignaciones del turno.
+   - Desglose (cuartos, sueldos, efectivo esperado) viene del backend:
+     mañana = cuartos − sueldos; tarde = (mañana+tarde acumulado) − sueldos
+     de mañana+tarde+noche; noche = cuartos sin descuento.
+   - Ventanas horarias en UI (backend también las valida). */
 
 (function () {
     var DATOS     = window.CORTES_DATA || {};
@@ -36,11 +38,6 @@
             if (sel.options[i].value === v) { sel.selectedIndex = i; return true; }
         }
         return false;
-    }
-
-    function getSelectedEmpSueldo(sel) {
-        var opt = sel.options[sel.selectedIndex];
-        return opt ? (parseFloat(opt.dataset.sueldo) || 0) : 0;
     }
 
     // ── FIX 1: poblar dropdown con empleados del turno (o todos si no hay asignación) ──
@@ -108,36 +105,6 @@
         }
     }
 
-    // ── FIX 2: sueldo del día con empleados únicos (evita doble turno duplicado) ──
-
-    function calcSueldosDia() {
-        var seen   = {};
-        var total  = 0;
-        var partes = [];
-
-        ['manana', 'tarde', 'noche'].forEach(function (t) {
-            (asigs[t] || []).forEach(function (emp) {
-                if (!seen[emp.empleado_id]) {
-                    seen[emp.empleado_id] = true;
-                    total += emp.sueldo;
-                    partes.push(emp.emp_nombre + ' ' + fmt(emp.sueldo));
-                }
-            });
-        });
-
-        // Fallback si no hay ninguna asignación: sumar por turno sin deduplicar
-        if (partes.length === 0) {
-            total  = (sueldos['manana'] || 0) + (sueldos['tarde'] || 0) + (sueldos['noche'] || 0);
-            partes = [
-                'Mañana '  + fmt(sueldos['manana'] || 0),
-                'Tarde '   + fmt(sueldos['tarde']  || 0),
-                'Noche '   + fmt(sueldos['noche']  || 0),
-            ];
-        }
-
-        return { total: total, partes: partes };
-    }
-
     // ── MODAL DECLARAR ───────────────────────────────────────
 
     var modalDec        = document.getElementById('modal-declarar');
@@ -148,32 +115,51 @@
     var decBrutoCalc    = document.getElementById('dec-bruto-calc');
     var decError        = document.getElementById('modal-dec-error');
     var decInfoBox      = document.getElementById('dec-info-sueldos');
+    var decInfoCuartos  = document.getElementById('dec-info-cuartos');
+    var decInfoCuartosLbl = document.getElementById('dec-info-cuartos-label');
     var decInfoSueldo   = document.getElementById('dec-info-sueldo-emp');
     var decInfoNeto     = document.getElementById('dec-info-neto');
     var decInfoNota     = document.getElementById('dec-info-nota');
 
     var decTurnoActual = '';
     var decFechaActual = '';   // fecha real del turno (para noche = día anterior; mañana/tarde = hoy)
+    var decCalc        = null; // desglose del sistema devuelto por la API
 
     function actualizarInfoSueldos() {
-        var bruto  = parseFloat(decBruto.value) || 0;
-        var sueldo = 0;
-        var nota   = '';
+        // El desglose es autoritativo del backend (cuartos y sueldos del calendario).
+        if (!decCalc) { decInfoBox.hidden = true; return; }
+
+        var cuartos  = decCalc.cuartos_acumulado || 0;
+        var sueldos_ = decCalc.sueldos || 0;
+        var esperado = decCalc.bruto_calculado || 0;   // neto de sueldos
 
         if (decTurnoActual === 'tarde') {
-            var dia = calcSueldosDia();
-            sueldo  = dia.total;
-            nota    = dia.partes.join(' · ');
-            decInfoSueldo.textContent = fmt(sueldo) + ' (empleados únicos del día)';
+            decInfoCuartosLbl.textContent = 'Cuartos (mañana + tarde)';
         } else {
-            sueldo = getSelectedEmpSueldo(decEmpId);
-            if (!sueldo) sueldo = sueldos[decTurnoActual] || 0;
-            decInfoSueldo.textContent = fmt(sueldo);
+            decInfoCuartosLbl.textContent = 'Cuartos';
         }
+        decInfoCuartos.textContent = fmt(cuartos);
+        decInfoSueldo.textContent  = sueldos_ ? ('− ' + fmt(sueldos_)) : fmt(0);
+        decInfoNeto.textContent    = fmt(esperado);
 
-        decInfoNeto.textContent = fmt(bruto - sueldo);
+        // Nota contextual + diferencia contra lo declarado
+        var nota = '';
+        if (decTurnoActual === 'tarde') {
+            nota = 'Acumulado del día (incluye la mañana). Descuenta sueldos de mañana, tarde y noche.';
+        } else if (decTurnoActual === 'noche') {
+            nota = 'Noche 23:00–08:00, sin descontar sueldos.';
+        }
+        var declarado = parseFloat(decBruto.value);
+        if (!isNaN(declarado)) {
+            var diff = declarado - esperado;
+            if (Math.abs(diff) >= 1) {
+                nota += (nota ? ' · ' : '') +
+                    'Diferencia vs declarado: ' + (diff >= 0 ? '+' : '') + fmt(diff);
+            }
+        }
         if (decInfoNota) decInfoNota.textContent = nota;
-        decInfoBox.hidden = (sueldo === 0 && !nota);
+
+        decInfoBox.hidden = false;
     }
 
     function abrirModalDeclarar(turno, fecha) {
@@ -184,6 +170,7 @@
 
         decBruto.value = '';
         decNotas.value = '';
+        decCalc = null;
         decBrutoCalc.textContent = 'Calculando...';
         decInfoBox.hidden = true;
         hideError(decError);
@@ -200,6 +187,7 @@
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (d.ok) {
+                    decCalc = d;
                     decBrutoCalc.textContent = fmt(d.bruto_calculado);
                     if (!decBruto.value) {
                         decBruto.value = (d.bruto_calculado || 0).toFixed(2);

@@ -59,23 +59,36 @@ def _contadores_dia_operativo(conn) -> dict:
 
 
 def _actividad_dia(conn, es_admin: bool) -> list[dict]:
-    hoy = date.today().isoformat()
+    """
+    Rentas del "día operativo" (08:00–08:00 del día siguiente), no del día de
+    calendario. Así la lista no se reinicia a medianoche: sigue mostrando la
+    actividad del ciclo hasta las 8am, igual que el contador de rentas.
+    """
+    ahora  = datetime.now()
+    op_day = date.today() - timedelta(days=1) if ahora.hour < 8 else date.today()
+    fecha     = op_day.isoformat()
+    fecha_sig = (op_day + timedelta(days=1)).isoformat()
+
     base = """
-        SELECT r.id, r.cuarto_id, r.hora_registro, r.duracion_horas,
+        SELECT r.id, r.cuarto_id, r.fecha, r.hora_registro, r.duracion_horas,
                r.precio_default, r.precio_cobrado, r.notas, r.estado,
                r.registrado_por, r.cancelado_por, r.cancelado_at,
                r.motivo_cancelacion, r.editado, r.editado_por,
                c.nombre_display, c.tipo
         FROM rentas r
         JOIN cuartos c ON c.id = r.cuarto_id
-        WHERE r.fecha = ?
+        WHERE (
+            (r.fecha = ? AND r.hora_registro >= '08:00:00')
+            OR
+            (r.fecha = ? AND r.hora_registro < '08:00:00')
+        )
     """
     if not es_admin:
         base += " AND r.estado = 'activo'"
-    base += " ORDER BY r.hora_registro DESC"
+    base += " ORDER BY r.fecha DESC, r.hora_registro DESC"
 
     result = []
-    for r in conn.execute(base, (hoy,)).fetchall():
+    for r in conn.execute(base, (fecha, fecha_sig)).fetchall():
         item = dict(r)
         item["editado"] = bool(item["editado"])
         result.append(item)

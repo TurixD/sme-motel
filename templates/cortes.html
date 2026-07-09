@@ -160,14 +160,18 @@
             <input id="dec-bruto" class="form-input form-input--mono" type="number" step="0.01" min="0" placeholder="0.00">
         </div>
 
-        <!-- Bloque informativo de sueldos (solo visual, no se guarda) -->
+        <!-- Desglose del sistema (referencia, no se guarda) -->
         <div class="corte-info-sueldos" id="dec-info-sueldos" hidden>
             <div class="corte-info-sueldos__row">
-                <span class="corte-info-sueldos__label">Sueldo del empleado</span>
+                <span class="corte-info-sueldos__label" id="dec-info-cuartos-label">Cuartos</span>
+                <span class="corte-info-sueldos__val" id="dec-info-cuartos">$0</span>
+            </div>
+            <div class="corte-info-sueldos__row">
+                <span class="corte-info-sueldos__label">Sueldos descontados</span>
                 <span class="corte-info-sueldos__val" id="dec-info-sueldo-emp">$0</span>
             </div>
             <div class="corte-info-sueldos__row corte-info-sueldos__row--neto" id="dec-info-neto-row">
-                <span class="corte-info-sueldos__label">Efectivo tras pagar sueldo</span>
+                <span class="corte-info-sueldos__label">Efectivo esperado en caja</span>
                 <span class="corte-info-sueldos__val corte-info-sueldos__val--accent" id="dec-info-neto">$0</span>
             </div>
             <p class="corte-info-sueldos__note" id="dec-info-nota"></p>

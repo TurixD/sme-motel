@@ -74,23 +74,100 @@ def _calcular_bruto(conn, turno: str, fecha: str) -> dict:
     return {"bruto": float(row["bruto"]), "count_rentas": int(row["cnt"])}
 
 
+def _sueldos_turno(conn, turno: str, fecha: str) -> dict:
+    """Suma de sueldos de los empleados asignados a un turno según el calendario."""
+    row = conn.execute(
+        """SELECT COALESCE(SUM(t.sueldo), 0) AS total, COUNT(*) AS cnt
+           FROM asignaciones_turnos a
+           JOIN turnos    t ON t.id = a.turno_id
+           JOIN empleados e ON e.id = a.empleado_id
+           WHERE a.fecha = ? AND t.nombre = ? AND e.activo = 1""",
+        (fecha, turno),
+    ).fetchone()
+    return {"sueldos": float(row["total"]), "empleados": int(row["cnt"])}
+
+
+def _calcular_corte(conn, turno: str, fecha: str) -> dict:
+    """
+    Monto esperado del corte según el flujo operativo (v2.5). Los sueldos salen
+    del calendario (asignaciones_turnos), no de un valor fijo:
+
+      mañana: cuartos_mañana − sueldos_mañana
+      tarde:  (cuartos_mañana + cuartos_tarde) − (sueldos mañana + tarde + noche)
+              → acumulativo: incluye la mañana, porque el efectivo se recoge a las
+                11pm (junto con la mañana) y el sueldo de la noche se paga con el
+                de la tarde.
+      noche:  cuartos_noche, sin descontar nada (su sueldo ya se restó en la tarde).
+
+    Devuelve el desglose para mostrarlo en la UI. `neto` es el monto del corte.
+    """
+    r_manana = _calcular_bruto(conn, "manana", fecha)
+
+    if turno == "manana":
+        s = _sueldos_turno(conn, "manana", fecha)
+        return {
+            "turno":             "manana",
+            "cuartos_turno":     r_manana["bruto"],
+            "cuartos_acumulado": r_manana["bruto"],
+            "count_rentas":      r_manana["count_rentas"],
+            "sueldos":           s["sueldos"],
+            "empleados":         s["empleados"],
+            "neto":              r_manana["bruto"] - s["sueldos"],
+        }
+
+    if turno == "tarde":
+        r_tarde = _calcular_bruto(conn, "tarde", fecha)
+        s_m = _sueldos_turno(conn, "manana", fecha)["sueldos"]
+        s_t = _sueldos_turno(conn, "tarde",  fecha)["sueldos"]
+        s_n = _sueldos_turno(conn, "noche",  fecha)["sueldos"]
+        acumulado = r_manana["bruto"] + r_tarde["bruto"]
+        sueldos   = s_m + s_t + s_n
+        return {
+            "turno":             "tarde",
+            "cuartos_turno":     r_tarde["bruto"],
+            "cuartos_acumulado": acumulado,
+            "count_rentas":      r_tarde["count_rentas"],
+            "sueldos":           sueldos,
+            "empleados":         None,
+            "neto":              acumulado - sueldos,
+        }
+
+    # noche: cuartos de 23:00 a 08:00, sin descuento
+    r_noche = _calcular_bruto(conn, "noche", fecha)
+    return {
+        "turno":             "noche",
+        "cuartos_turno":     r_noche["bruto"],
+        "cuartos_acumulado": r_noche["bruto"],
+        "count_rentas":      r_noche["count_rentas"],
+        "sueldos":           0.0,
+        "empleados":         0,
+        "neto":              r_noche["bruto"],
+    }
+
+
 def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
     """
-    Recalcula ingresos_diarios para una fecha sumando los cortes válidos
+    Recalcula ingresos_diarios para una fecha usando los cortes válidos
     (estado 'declarado' o 'editado'; los 'anulado' no cuentan).
 
-    Siempre recalcula con los cortes existentes, sin importar cuántos turnos
-    haya declarados (1, 2 o 3). El total se actualiza de forma incremental en
-    cada declaración/edición/anulación, reflejando lo declarado hasta el momento.
+    El corte de la tarde es ACUMULATIVO (ya incluye la mañana), porque el
+    efectivo se recoge a las 11pm y a las 8am. Por eso el total del día NO suma
+    los tres cortes (duplicaría la mañana): usa el corte de la tarde —o el de
+    la mañana si aún no hay tarde— más el de la noche.
     """
 
-    bruto_total = conn.execute(
-        """SELECT COALESCE(SUM(bruto_declarado), 0) FROM cortes_turno
-           WHERE fecha = ? AND estado IN ('declarado', 'editado')""",
-        (fecha,),
-    ).fetchone()[0]
-    bruto_total = float(bruto_total)
-    notas_sync  = "Generado desde cortes de turno v2.3"
+    cortes = {
+        r["turno"]: float(r["bruto_declarado"])
+        for r in conn.execute(
+            """SELECT turno, bruto_declarado FROM cortes_turno
+               WHERE fecha = ? AND estado IN ('declarado', 'editado')""",
+            (fecha,),
+        ).fetchall()
+    }
+    pickup_dia   = cortes.get("tarde", cortes.get("manana", 0.0))  # 11pm (tarde incluye mañana)
+    pickup_noche = cortes.get("noche", 0.0)                        # 8am
+    bruto_total  = pickup_dia + pickup_noche
+    notas_sync   = "Generado desde cortes de turno v2.5"
 
     existente = conn.execute(
         "SELECT id FROM ingresos_diarios WHERE fecha = ?", (fecha,)
@@ -236,8 +313,15 @@ def api_calcular_bruto(turno, fecha):
         return jsonify({"ok": False, "error": "Fecha inválida"}), 400
 
     with _db() as conn:
-        r = _calcular_bruto(conn, turno, fecha)
-        return jsonify({"ok": True, "bruto_calculado": r["bruto"], "count_rentas": r["count_rentas"]})
+        r = _calcular_corte(conn, turno, fecha)
+        return jsonify({
+            "ok":                True,
+            "bruto_calculado":   r["neto"],            # monto esperado del corte (neto de sueldos)
+            "count_rentas":      r["count_rentas"],
+            "cuartos_turno":     r["cuartos_turno"],   # cuartos solo de este turno
+            "cuartos_acumulado": r["cuartos_acumulado"],  # incluye la mañana en la tarde
+            "sueldos":           r["sueldos"],         # sueldos descontados
+        })
 
 
 # ── API: declarar corte ───────────────────────────────────────
@@ -271,7 +355,7 @@ def api_declarar():
     ahora           = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     with _db() as conn:
-        bruto_calc = _calcular_bruto(conn, turno, fecha)["bruto"]
+        bruto_calc = _calcular_corte(conn, turno, fecha)["neto"]
 
         try:
             cur = conn.execute(

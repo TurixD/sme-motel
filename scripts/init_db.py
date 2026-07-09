@@ -70,25 +70,29 @@ _CUARTOS_SEED = [
 
 def _recalcular_ingresos_diarios(conn, fecha: str) -> None:
     """
-    Recalcula ingresos_diarios para una fecha sumando cortes_turno válidos
-    (estado 'declarado' o 'editado'). Solo actualiza si ya existen los 3
-    turnos del día para esa fecha. Espejo de _actualizar_ingresos_diarios
+    Recalcula ingresos_diarios para una fecha usando cortes_turno válidos
+    (estado 'declarado' o 'editado'). El corte de la tarde es acumulativo (ya
+    incluye la mañana), así que el total = tarde (o mañana si no hay tarde) +
+    noche, para no duplicar la mañana. Espejo de _actualizar_ingresos_diarios
     en modules/cortes.py, duplicado aquí para no acoplar init_db.py al
     paquete de la app.
     """
-    turnos_presentes = conn.execute(
-        "SELECT COUNT(DISTINCT turno) FROM cortes_turno WHERE fecha = ?", (fecha,)
-    ).fetchone()[0]
-    if turnos_presentes < 3:
-        print(f"  ingresos_diarios: {fecha} no tiene los 3 turnos, no se recalcula")
+    cortes = {
+        r[0]: float(r[1])
+        for r in conn.execute(
+            """SELECT turno, bruto_declarado FROM cortes_turno
+               WHERE fecha = ? AND estado IN ('declarado', 'editado')""",
+            (fecha,),
+        ).fetchall()
+    }
+    if not cortes:
+        print(f"  ingresos_diarios: {fecha} sin cortes válidos, no se recalcula")
         return
 
-    bruto_total = float(conn.execute(
-        """SELECT COALESCE(SUM(bruto_declarado), 0) FROM cortes_turno
-           WHERE fecha = ? AND estado IN ('declarado', 'editado')""",
-        (fecha,),
-    ).fetchone()[0])
-    notas_sync = "Generado desde cortes de turno v2.3"
+    pickup_dia   = cortes.get("tarde", cortes.get("manana", 0.0))
+    pickup_noche = cortes.get("noche", 0.0)
+    bruto_total  = pickup_dia + pickup_noche
+    notas_sync = "Generado desde cortes de turno v2.5"
 
     existente = conn.execute(
         "SELECT id FROM ingresos_diarios WHERE fecha = ?", (fecha,)
