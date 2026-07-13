@@ -134,6 +134,27 @@ def _validar_empleados(conn, ids):
     return True, None
 
 
+# ── Roster para inyectar en el system prompt (dinámico cada request) ─────────
+
+_ORDEN_TURNO = {"manana": 0, "tarde": 1, "noche": 2}
+
+
+def roster_texto(conn) -> str:
+    """Lista compacta de empleados activos con ids, para el system prompt.
+    Se regenera cada request desde la BD → nunca se desactualiza."""
+    rows = conn.execute(
+        "SELECT id, nombre, turno_default, es_socio FROM empleados WHERE activo=1 ORDER BY nombre"
+    ).fetchall()
+    grupos = {}
+    for r in rows:
+        etiqueta = f"{r['nombre']}({r['id']}" + (", socio" if r["es_socio"] else "") + ")"
+        grupos.setdefault(r["turno_default"] or "otro", []).append(etiqueta)
+    orden = sorted(grupos, key=lambda t: _ORDEN_TURNO.get(t, 9))
+    lineas = [f"- {t}: " + ", ".join(grupos[t]) for t in orden]
+    return ("EMPLEADOS ACTIVOS (nombre(id)); usa estos ids EXACTOS, no los inventes ni "
+            "adivines. Si un nombre no aparece aquí, no existe o está inactivo:\n" + "\n".join(lineas))
+
+
 # ── Tools de LECTURA (se ejecutan sin confirmación) ──────────────────────────
 
 def tool_consultar_empleados(conn, inp):
@@ -186,11 +207,15 @@ def tool_consultar_asignaciones(conn, inp):
     if dia is not None:
         rows = [r for r in rows if _weekday(r["fecha"]) == dia]
 
+    total = len(rows)
     n_fechas = len({r["fecha"] for r in rows})
+    # Compacto: no devolvemos cientos de filas al modelo (evita que enumere y gasta menos).
+    truncado = total > 60
     return {
         "ok": True,
-        "asignaciones": rows,
-        "total": len(rows),
+        "asignaciones": rows[:60],
+        "total": total,
+        "truncado": truncado,
         "fechas_distintas": n_fechas,
         "rango": {"desde": fi, "hasta": ff},
     }

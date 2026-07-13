@@ -166,12 +166,46 @@ ESTILO DE RESPUESTA:
 - Si falta información, pregúntale a Turi en lugar de adivinar"""
 
 
+# Ejemplos de flujos ideales (Haiku imita ejemplos mucho mejor que reglas abstractas).
+# Van en el bloque cacheado del system, así que su costo es marginal.
+_FEWSHOT = """EJEMPLOS DE CÓMO ACTUAR (síguelos como molde):
+
+Ejemplo 1 — lectura simple:
+Usuario: "¿quién trabaja el sábado en la tarde?"
+Tú: llamas consultar_asignaciones(dia_semana="sabado", turno="tarde") y respondes solo con los nombres del próximo sábado. No enumeras todos los sábados del año.
+
+Ejemplo 2 — reasignación recurrente con excepción (caso típico):
+Usuario: "quita a Dulce y Turi de los sábados en la tarde y pon a Betzaira, pero el sábado 18 va Martha en lugar de Betzaira"
+Tú:
+1. Tomas los ids del roster inyectado (Dulce, Turi, Betzaira, Martha). No preguntas a la BD si ya los tienes en el roster.
+2. Llamas UNA vez:
+   reasignar_turnos_recurrentes(
+     dia_semana="sabado", turno="tarde",
+     quitar_empleado_ids=[<Dulce>, <Turi>],
+     agregar_empleado_ids=[<Betzaira>],
+     excepciones=[{"fecha":"2026-07-18","quitar_ids":[<Betzaira>],"agregar_ids":[<Martha>]}]
+   )
+3. El tool te devuelve conteos reales (n_fechas, eliminados, insertados) y crea una tarjeta. Presentas UN resumen con esos conteos ("Son 51 sábados; quito a Dulce y Turi, pongo a Betzaira, y el 18 va Martha") y dices "confirma la tarjeta". NO vuelves a preguntar ni enumeras las 51 fechas.
+
+Ejemplo 3 — el tool reporta cobertura:
+Si un tool devuelve error "cobertura" con fechas que quedarían sin nadie, NO insistes: explicas cuáles fechas quedarían vacías y propones agregar a alguien o dejar a alguien. Nunca dices solo "intenta de nuevo"."""
+
+
 # ── BD helpers ────────────────────────────────────────────────────────────────
 
 def _db():
     conn = sqlite3.connect(Config.DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _roster_texto():
+    """Roster de empleados activos (dinámico, para inyectar en el system prompt)."""
+    conn = _db()
+    try:
+        return AT.roster_texto(conn)
+    finally:
+        conn.close()
 
 
 def _uso_mensual():
@@ -383,8 +417,14 @@ def _tool_turnos(nombre, inp, sesion_id):
         conn.close()
 
     cambio_id = _registrar_cambio_estructurado(sesion_id, kind, inp, plan)
-    return {"ok": True, "cambio_id": cambio_id, "requiere_confirmacion": True,
-            "preview": {k: plan[k] for k in plan if k not in ("ops", "nombres")}}
+    # Preview COMPACTO para el modelo: conteos + muestra de fechas, nunca la lista completa.
+    preview = {k: plan[k] for k in plan
+               if k not in ("ops", "nombres", "fechas_afectadas")}
+    fechas = plan.get("fechas_afectadas")
+    if fechas is not None:
+        preview["fechas_muestra"] = fechas[:5]
+        preview["fechas_total"] = len(fechas)
+    return {"ok": True, "cambio_id": cambio_id, "requiere_confirmacion": True, "preview": preview}
 
 
 # ── Implementación de tools ───────────────────────────────────────────────────
@@ -552,11 +592,14 @@ def api_mensaje():
     # SDK con reintentos automáticos (429/5xx/timeout) con backoff exponencial.
     client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY, max_retries=3)
 
-    # System prompt en dos bloques: el estable se cachea (~10% en requests
-    # subsecuentes); la fecha va aparte para no invalidar la caché cada minuto.
+    # System prompt en dos bloques: el estable (reglas + roster + ejemplos) se
+    # cachea (~10% en requests subsecuentes); la fecha va aparte para no
+    # invalidar la caché cada minuto. El roster se regenera de la BD cada request
+    # pero cambia rara vez, así que la caché se mantiene entre mensajes.
     ctx = AT.contexto_fecha()
+    bloque_estable = _SYSTEM_PROMPT + "\n\n" + _roster_texto() + "\n\n" + _FEWSHOT
     system_blocks = [
-        {"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": bloque_estable, "cache_control": {"type": "ephemeral"}},
         {"type": "text",
          "text": f"FECHA Y HORA ACTUAL (America/Mexico_City): {ctx['dia_semana']} "
                  f"{ctx['fecha']}, {ctx['hora']}. Úsala para todo lo relativo."},
