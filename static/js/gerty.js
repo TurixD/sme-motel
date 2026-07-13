@@ -233,7 +233,10 @@
 
             var speed = Math.hypot(velX, velY);          // px/ms
             var dist  = Math.hypot(curX, curY);
-            if (moved && (speed > 0.6 || dist > 110)) {
+            // Aventón real: buena distancia + fuerza, o un arrastre largo y deliberado.
+            // (un toque rápido ya no lo manda al infinito)
+            var flung = moved && ((dist > 90 && speed > 1.3) || dist > 260);
+            if (flung) {
                 dismiss();
             } else {
                 widget.style.transition = 'transform 260ms cubic-bezier(.2,.8,.3,1)';
