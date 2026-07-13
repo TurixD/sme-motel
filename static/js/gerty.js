@@ -153,6 +153,7 @@
 
     /* ── Click: redirigir a /asistente (admin) o chiveado breve (empleado), easter egg (doble) ── */
     var singleTimer = null;
+    var justDragged = false;   // true justo después de arrastrar, para no navegar por error
     svg.addEventListener('dblclick', function (e) {
         e.preventDefault();
         clearTimeout(singleTimer);
@@ -163,6 +164,7 @@
         }
     });
     svg.addEventListener('click', function () {
+        if (justDragged) return;   // fue un arrastre, no un tap: ignora
         clearTimeout(singleTimer);
         singleTimer = setTimeout(function () {
             if (easterActive) {
@@ -179,6 +181,104 @@
             }
         }, 220);
     });
+
+    /* ── Arrastrar y aventar para esconder: sale por el borde, vuelve en ~1 min ── */
+    var widget = svg.closest('.gerty-widget');
+    if (widget && window.PointerEvent) {
+        var HIDE_MS        = 60000;   // 1 minuto escondido
+        var MOVE_THRESHOLD = 8;       // px para distinguir arrastre de tap
+        var dragging = false, moved = false, pointerId = null;
+        var startX = 0, startY = 0, curX = 0, curY = 0;
+        var lastX = 0, lastY = 0, lastT = 0, velX = 0, velY = 0;
+        var hideTimer = null;
+
+        function setTranslate(x, y) {
+            widget.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+        }
+
+        function onDown(e) {
+            if (widget.classList.contains('gerty-hidden')) return;
+            dragging = true; moved = false; pointerId = e.pointerId;
+            startX = lastX = e.clientX; startY = lastY = e.clientY;
+            curX = curY = velX = velY = 0; lastT = e.timeStamp;
+            widget.style.animation = 'none';
+            widget.style.transition = 'none';
+            try { widget.setPointerCapture(pointerId); } catch (_) {}
+        }
+
+        function onMove(e) {
+            if (!dragging || e.pointerId !== pointerId) return;
+            var dx = e.clientX - startX, dy = e.clientY - startY;
+            if (!moved && (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD)) {
+                moved = true;
+                widget.classList.add('gerty-dragging');
+            }
+            if (!moved) return;
+            curX = dx; curY = dy;
+            setTranslate(dx, dy);
+            var dt = e.timeStamp - lastT;
+            if (dt > 0) {
+                velX = (e.clientX - lastX) / dt;   // px/ms
+                velY = (e.clientY - lastY) / dt;
+            }
+            lastX = e.clientX; lastY = e.clientY; lastT = e.timeStamp;
+            e.preventDefault();
+        }
+
+        function onUp(e) {
+            if (!dragging || e.pointerId !== pointerId) return;
+            dragging = false;
+            widget.classList.remove('gerty-dragging');
+            try { widget.releasePointerCapture(pointerId); } catch (_) {}
+
+            var speed = Math.hypot(velX, velY);          // px/ms
+            var dist  = Math.hypot(curX, curY);
+            if (moved && (speed > 0.6 || dist > 110)) {
+                dismiss();
+            } else {
+                widget.style.transition = 'transform 260ms cubic-bezier(.2,.8,.3,1)';
+                setTranslate(0, 0);
+                setTimeout(clearInline, 300);
+            }
+            if (moved) { justDragged = true; setTimeout(function () { justDragged = false; }, 60); }
+        }
+
+        function clearInline() {
+            widget.style.transition = 'none';
+            widget.style.transform  = '';
+            widget.style.animation  = '';   // reanuda el flotar
+        }
+
+        function dismiss() {
+            var dirX = velX, dirY = velY;
+            if (Math.hypot(dirX, dirY) < 0.05) { dirX = curX; dirY = curY; }
+            var mag   = Math.hypot(dirX, dirY) || 1;
+            var reach = Math.max(window.innerWidth, window.innerHeight) * 1.5;
+            setTranslate(curX + (dirX / mag) * reach, curY + (dirY / mag) * reach);
+            widget.style.transition = 'transform 320ms cubic-bezier(.5,0,.9,.4)';
+            widget.classList.add('gerty-hidden');
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = setTimeout(reaparecer, HIDE_MS);
+        }
+
+        function reaparecer() {
+            widget.style.transition = 'none';
+            widget.style.animation  = 'none';
+            setTranslate(180, 0);                 // fuera de pantalla, a la derecha
+            widget.classList.remove('gerty-hidden');
+            void widget.offsetWidth;              // fuerza reflow
+            requestAnimationFrame(function () {
+                widget.style.transition = 'transform 1200ms cubic-bezier(.2,.85,.25,1)';
+                setTranslate(0, 0);               // entra despacito
+                setTimeout(clearInline, 1250);
+            });
+        }
+
+        widget.addEventListener('pointerdown', onDown);
+        widget.addEventListener('pointermove', onMove);
+        widget.addEventListener('pointerup', onUp);
+        widget.addEventListener('pointercancel', onUp);
+    }
 
     /* ── Inicialización ── */
     // Etiqueta de ruta al cargar

@@ -19,6 +19,19 @@
     filter: brightness(1.06) drop-shadow(0 4px 12px rgba(0,0,0,0.4));
 }
 
+/* ── Arrastrar / aventar para esconder ── */
+.gerty-widget {
+    touch-action: none;   /* al agarrar a Gerty no se hace scroll de la página */
+}
+.gerty-widget.gerty-dragging {
+    animation: none !important;   /* pausa el flotar mientras se arrastra */
+    cursor: grabbing;
+    filter: drop-shadow(0 8px 20px rgba(0,0,0,0.5));
+}
+.gerty-widget.gerty-hidden {
+    pointer-events: none;   /* mientras está "afuera" no captura toques */
+}
+
 .gerty-widget .gerty-svg {
     width: 100px;
     height: 147px;

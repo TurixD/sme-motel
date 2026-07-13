@@ -116,8 +116,9 @@ a {
    ya muestra la hora), así que se ocultan para buena visualización. En
    desktop/kiosco se mantienen. */
 @media (max-width: 760px) {
-    .lock-clock,
-    .gerty-widget { display: none !important; }
+    /* El reloj es redundante en el celular (la barra de estado ya da la hora).
+       Gerty se queda: en móvil se puede arrastrar/aventar para esconderlo. */
+    .lock-clock { display: none !important; }
 }
 
 /* --- Componente tarjeta --- */
