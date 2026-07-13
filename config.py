@@ -32,6 +32,10 @@ class Config:
 
     # --- Claude / Anthropic ---
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+    # Modelo del asistente conversacional. Cambiable sin tocar código.
+    # Barato por defecto (Haiku 4.5). Alternativas: claude-sonnet-5, claude-opus-4-8.
+    ASSISTANT_MODEL = os.getenv("SME_ASSISTANT_MODEL", "claude-haiku-4-5")
+    ASSISTANT_MAX_TOKENS = int(os.getenv("SME_ASSISTANT_MAX_TOKENS") or 4096)
 
     # --- Rutas ---
     BASE_DIR = BASE_DIR

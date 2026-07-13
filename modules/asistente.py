@@ -27,8 +27,8 @@ from modules.auth import solo_admin
 asistente_bp = Blueprint("asistente", __name__)
 _log = get_logger()
 
-_MODEL = "claude-sonnet-5"
-_MAX_TOKENS = 2500
+_MODEL = Config.ASSISTANT_MODEL
+_MAX_TOKENS = Config.ASSISTANT_MAX_TOKENS
 _MAX_ITER = 10
 _MODULO = "asistente"
 
