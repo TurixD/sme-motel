@@ -22,8 +22,6 @@ cortes_bp = Blueprint("cortes", __name__)
 
 _TURNOS_ORDEN  = ["manana", "tarde", "noche"]
 _TURNO_LABELS  = {"manana": "Mañana", "tarde": "Tarde", "noche": "Noche"}
-_FRANJA_INICIO = {"manana": "08:00:00", "tarde": "16:00:00"}
-_FRANJA_FIN    = {"manana": "15:59:59", "tarde": "22:59:59"}
 
 # Ventanas horarias para que el EMPLEADO pueda declarar (hora inicio inclusiva, fin inclusiva)
 _VENTANA_HORAS = {"manana": (15, 16), "tarde": (22, 23), "noche": (7, 9)}
@@ -79,30 +77,71 @@ def _db():
 
 # ── Cálculo de bruto ──────────────────────────────────────────
 
+def _declarado_at(conn, fecha: str, turno: str):
+    """Hora de declaración del corte de un turno (si está declarado/editado)."""
+    row = conn.execute(
+        """SELECT declarado_at FROM cortes_turno
+           WHERE fecha = ? AND turno = ? AND estado IN ('declarado', 'editado') LIMIT 1""",
+        (fecha, turno),
+    ).fetchone()
+    return row["declarado_at"] if row and row["declarado_at"] else None
+
+
+def _limites_turnos(conn, fecha: str, now=None) -> dict:
+    """
+    Límites (datetime 'YYYY-MM-DD HH:MM:SS') entre turnos del día operativo.
+
+    La ventana de un turno se mantiene ABIERTA hasta que ese turno hace su corte:
+    el límite mañana|tarde es la hora en que se declaró el corte de la mañana (si
+    ya se hizo), o el tope fijo 16:00 —extendido hasta 'ahora' si aún no se corta
+    y ya pasaron las 16:00—. Igual para tarde|noche con 23:00. Así, un cuarto
+    registrado después del cambio de turno pero antes del corte cuenta en el
+    turno que todavía no ha cortado. El total del día es invariante (la tarde es
+    acumulativa): solo cambia el reparto entre turnos.
+    """
+    now = now or datetime.now()
+    now_str   = now.strftime("%Y-%m-%d %H:%M:%S")
+    fecha_sig = (date.fromisoformat(fecha) + timedelta(days=1)).isoformat()
+    ini = f"{fecha} 08:00:00"
+    fin = f"{fecha_sig} 08:00:00"
+    dm  = _declarado_at(conn, fecha, "manana")
+    dt  = _declarado_at(conn, fecha, "tarde")
+
+    def _clamp(x, lo, hi):
+        return max(lo, min(x, hi))
+
+    # Sin corte: la ventana se extiende hasta 'ahora', pero ACOTADA al fin de la
+    # ventana de declaración del turno (mañana ≤16:59, tarde ≤23:59). Así un
+    # turno nunca declarado no se traga el siguiente (protege la noche 23:00–08:00).
+    b_mt = dm if dm else _clamp(now_str, f"{fecha} 16:00:00", f"{fecha} 16:59:59")
+    b_tn = dt if dt else _clamp(now_str, f"{fecha} 23:00:00", f"{fecha} 23:59:59")
+    b_mt = min(max(b_mt, ini), fin)          # ini <= b_mt <= fin
+    b_tn = min(max(b_tn, b_mt), fin)         # b_mt <= b_tn <= fin
+    return {"ini": ini, "b_mt": b_mt, "b_tn": b_tn, "fin": fin}
+
+
 def _calcular_bruto(conn, turno: str, fecha: str) -> dict:
     """
-    Suma rentas activas del sistema para la franja del turno, separando el
-    efectivo (entra a caja) del pago con tarjeta (va al banco, no a caja).
+    Suma rentas activas del turno, separando efectivo (entra a caja) de tarjeta
+    (va al banco). Los límites entre turnos son dinámicos: la ventana de cada
+    turno queda abierta hasta que ese turno declara su corte (ver _limites_turnos).
     """
-    _SEL = """SELECT COALESCE(SUM(precio_cobrado), 0) AS bruto,
-                     COALESCE(SUM(CASE WHEN es_tarjeta = 1 THEN precio_cobrado ELSE 0 END), 0) AS tarjeta,
-                     COUNT(*) AS cnt
-              FROM rentas WHERE """
-    if turno in ("manana", "tarde"):
-        row = conn.execute(
-            _SEL + """fecha = ? AND hora_registro BETWEEN ? AND ? AND estado = 'activo'""",
-            (fecha, _FRANJA_INICIO[turno], _FRANJA_FIN[turno]),
-        ).fetchone()
-    else:  # noche: 23:00–07:59, cruza la medianoche
-        fecha_sig = (date.fromisoformat(fecha) + timedelta(days=1)).isoformat()
-        row = conn.execute(
-            _SEL + """(
-                   (fecha = ? AND hora_registro >= '23:00:00')
-                   OR
-                   (fecha = ? AND hora_registro < '08:00:00')
-               ) AND estado = 'activo'""",
-            (fecha, fecha_sig),
-        ).fetchone()
+    lim = _limites_turnos(conn, fecha)
+    lo, hi = {
+        "manana": (lim["ini"],  lim["b_mt"]),
+        "tarde":  (lim["b_mt"], lim["b_tn"]),
+        "noche":  (lim["b_tn"], lim["fin"]),
+    }[turno]
+    row = conn.execute(
+        """SELECT COALESCE(SUM(precio_cobrado), 0) AS bruto,
+                  COALESCE(SUM(CASE WHEN es_tarjeta = 1 THEN precio_cobrado ELSE 0 END), 0) AS tarjeta,
+                  COUNT(*) AS cnt
+           FROM rentas
+           WHERE (fecha || ' ' || hora_registro) >= ?
+             AND (fecha || ' ' || hora_registro) <  ?
+             AND estado = 'activo'""",
+        (lo, hi),
+    ).fetchone()
     bruto   = float(row["bruto"])
     tarjeta = float(row["tarjeta"])
     return {
