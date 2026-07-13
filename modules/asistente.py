@@ -9,6 +9,7 @@ Blueprint: asistente_bp
   GET  /asistente/api/nueva_sesion
 """
 
+import calendar
 import json
 import re
 import sqlite3
@@ -22,6 +23,7 @@ from ai.cost_calculator import calcular_costo
 from ai.tools import TOOLS
 from config import Config
 from logger import get_logger, log_action
+from modules import asistente_turnos as AT
 from modules.auth import solo_admin
 
 asistente_bp = Blueprint("asistente", __name__)
@@ -29,7 +31,7 @@ _log = get_logger()
 
 _MODEL = Config.ASSISTANT_MODEL
 _MAX_TOKENS = Config.ASSISTANT_MAX_TOKENS
-_MAX_ITER = 10
+_MAX_ITER = 15
 _MODULO = "asistente"
 
 _TABLAS_WHITELIST = {
@@ -82,27 +84,29 @@ def _validar_sql_cambio(sql: str):
         return False, f"{tipo} sin WHERE no permitido (afectaría toda la tabla).", None, None
     return True, None, tabla, tipo
 
-_SYSTEM_PROMPT = """Eres el asistente IA del SME (Software de Manejo de Estrés), sistema interno de un motel en Aguascalientes, México. El usuario es Turi, dueño junto con su socio Gabriel (utilidades 50/50). El motel tiene 9 empleados en 3 turnos (mañana 08-16, tarde 16-23, noche 23-08). Hablas español mexicano informal pero profesional, directo y honesto. NO usas emojis salvo que sean útiles.
+_SYSTEM_PROMPT = """Eres el asistente IA del SME, sistema interno del Motel Hacienda del Sauz en Aguascalientes, México. El usuario es Turi, dueño junto con su socio Gabriel (utilidades 50/50). Tres turnos: mañana 08-16, tarde 16-23, noche 23-08. Hablas español mexicano directo, honesto y CONCISO. NO usas emojis salvo que sean útiles.
 
-EMPLEADOS ACTIVOS: Wendy (manana), Vivina (manana), Martha (manana/tarde), Dulce (tarde), Cecy (tarde), Goyo (noche), Carmelo (noche/tarde), Turi (socio, tarde), Gabriel (socio, tarde).
+REGLAS CLAVE (síguelas siempre):
+1. FECHA: la fecha y hora actuales vienen inyectadas en tu contexto. NUNCA las calcules ni asumas por tu cuenta; úsalas para todo lo relativo ("hoy", "ayer", "este mes", "los sábados", etc.).
+2. NUNCA enumeres listas largas de fechas en el chat. Habla en términos de RANGOS y CONTEOS que te devuelven las herramientas. Si algo abarca muchos días, di "51 sábados del 13-jul al 06-jul", no la lista.
+3. NUNCA afirmes un conteo (cuántos registros, cuántas fechas, cuánto dinero) que no venga de un tool. Si no lo consultaste, consúltalo; no adivines.
+4. TURNOS (empleados/asignaciones): usa SIEMPRE las herramientas de dominio, NUNCA escribas SQL para turnos:
+   - Para leer: consultar_empleados (obtén ids aquí, nunca los adivines), consultar_asignaciones, resumen_cobertura.
+   - Para cambiar recurrente por día de la semana: reasignar_turnos_recurrentes.
+   - Para un ajuste puntual de una fecha: asignar_turno_fecha / quitar_turno_fecha.
+5. FLUJO DE CAMBIO (una sola confirmación): (a) consulta el estado real y los ids, (b) presenta UN resumen del plan con los conteos reales que devolvió el tool, (c) el tool genera una TARJETA que el usuario confirma con un botón. NO ejecutes tú; NO vuelvas a preguntar "¿confirmas?" en cada paso. Una vez que el usuario confirma la tarjeta, el sistema aplica TODO el plan de forma atómica.
+6. Si un tool devuelve un error o un problema de cobertura (una fecha quedaría sin nadie), explícalo en lenguaje claro y propón el siguiente paso concreto. NUNCA respondas solo "intenta de nuevo".
+7. Nombres tolerantes a dedazos: si consultar_empleados devuelve un match aproximado único (ej. "betzaida" → "Betzaira"), confírmalo UNA vez con el usuario y sigue.
+8. Para lecturas de dinero (ingresos, gastos, fondos, inventario) usa ejecutar_sql_lectura (solo SELECT). Para cambios de dinero de una sola operación usa proponer_cambio_datos.
 
 REGLAS DE NEGOCIO:
-- Utilidades 50/50 Turi y Gabriel
-- Renta $10,000 semanal (cada domingo automático) + $40,000 mensual
-- Fondos: Reserva general, CFE, Renta
-- Luz→descuenta fondo CFE; Renta→fondo Renta; Mantenimiento/Otro→Reserva (si confirma)
-- Un empleado NO puede tener dos turnos el mismo día — verifica conflictos con SELECT antes de proponer cambio
-- Si el cambio crearía doble turno → propón INTERCAMBIO con DOS llamadas a proponer_cambio_datos explicando que son parte del mismo intercambio
-- Los sueldos (turnos.sueldo, hoy $400 mañana/tarde y $500 noche) YA se descuentan en los cortes de turno: ingresos_diarios.total_neto es NETO de sueldos. NUNCA vuelvas a restar la nómina de los ingresos ni de la utilidad — ya está descontada.
+- Utilidades 50/50 Turi y Gabriel.
+- Renta $10,000 semanal (cada domingo automático) + $40,000 mensual.
+- Fondos: Reserva general, CFE, Renta. Luz→fondo CFE; Renta→fondo Renta; Mantenimiento/Otro→Reserva (si confirma).
+- Un empleado NO debe tener dos turnos el mismo día. Antes de agregar, verifica con consultar_asignaciones.
+- Los sueldos (turnos.sueldo: $400 mañana/tarde, $500 noche) YA se descuentan en los cortes de turno: ingresos_diarios.total_neto es NETO de sueldos. NUNCA vuelvas a restar la nómina de los ingresos ni de la utilidad.
 
-REGLAS DE HERRAMIENTAS:
-- Pregunta de lectura → ejecutar_sql_lectura
-- Tiempo relativo ("ayer", "esta semana", "el mes pasado") → primero obtener_fecha_hoy
-- Modificar datos → SIEMPRE proponer_cambio_datos (nunca escribas directo)
-- Menciona sesiones pasadas → buscar_conversaciones_pasadas
-- Cambio en asignaciones_turnos → SIEMPRE verifica conflictos con SELECT primero
-
-ESQUEMA BD (SQLite, tipos TEXT/REAL/INTEGER):
+ESQUEMA BD (para ejecutar_sql_lectura; los turnos NO se tocan por SQL):
 
 ingresos_diarios(id, fecha TEXT YYYY-MM-DD, monto_efectivo, monto_tarjeta, monto_transferencia, comision_tarjeta=tarjeta×0.04, total_neto, notas, creado_en)
   * total_neto YA es NETO de sueldos (los cortes de turno descuentan la nómina). NO restes la nómina otra vez.
@@ -121,7 +125,7 @@ empleados(id, nombre, turno_default [manana|tarde|noche], es_socio INTEGER 0/1, 
 turnos(id, nombre [manana|tarde|noche], hora_inicio, hora_fin, sueldo REAL)
 
 asignaciones_turnos(id, fecha, empleado_id FK, turno_id FK, es_doble_turno INTEGER 0/1, notas, creado_en)
-  UNIQUE: (fecha, turno_id, empleado_id) — un empleado NO puede tener dos turnos el mismo día
+  * NO la consultes ni modifiques por SQL: usa las herramientas de turnos (consultar_asignaciones, reasignar_turnos_recurrentes, etc.).
 
 pagos_empleados(id, asignacion_turno_id FK, empleado_id FK, fecha, monto, pagado INTEGER 0/1, creado_en)
 
@@ -245,10 +249,11 @@ def _cargar_historial_render(sesion_id):
 
 
 def _cambios_pendientes_sesion(sesion_id):
+    _asegurar_esquema()
     conn = _db()
     try:
         rows = conn.execute(
-            "SELECT id, descripcion_humana, sql, tabla, tipo FROM cambios_pendientes "
+            "SELECT id, descripcion_humana, sql, tabla, tipo, kind FROM cambios_pendientes "
             "WHERE sesion_id=? AND estado='pendiente' ORDER BY id",
             (sesion_id,),
         ).fetchall()
@@ -257,22 +262,138 @@ def _cambios_pendientes_sesion(sesion_id):
     return [dict(r) for r in rows]
 
 
+# ── Migración / esquema de cambios estructurados ──────────────────────────────
+
+_ESQUEMA_OK = False
+
+
+def _asegurar_esquema():
+    """Añade columnas kind/payload_json a cambios_pendientes si faltan (self-healing)."""
+    global _ESQUEMA_OK
+    if _ESQUEMA_OK:
+        return
+    conn = _db()
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(cambios_pendientes)")}
+        if "kind" not in cols:
+            conn.execute("ALTER TABLE cambios_pendientes ADD COLUMN kind TEXT NOT NULL DEFAULT 'sql'")
+        if "payload_json" not in cols:
+            conn.execute("ALTER TABLE cambios_pendientes ADD COLUMN payload_json TEXT")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS asistente_log ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " creado_en TEXT NOT NULL DEFAULT (datetime('now','localtime')),"
+            " sesion_id TEXT, kind TEXT, params_json TEXT,"
+            " registros_afectados INTEGER, exito INTEGER, error_message TEXT)"
+        )
+        conn.commit()
+        _ESQUEMA_OK = True
+    except Exception as exc:
+        _log.error("No se pudo migrar cambios_pendientes/asistente_log: %s", exc)
+    finally:
+        conn.close()
+
+
+def _registrar_asistente_log(sesion_id, kind, params, registros, exito, error=None):
+    """Auditoría de escrituras del asistente (solo tools de escritura)."""
+    conn = _db()
+    try:
+        conn.execute(
+            "INSERT INTO asistente_log "
+            "(sesion_id, kind, params_json, registros_afectados, exito, error_message) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (sesion_id, kind, json.dumps(params, ensure_ascii=False, default=str),
+             registros, 1 if exito else 0, error),
+        )
+        conn.commit()
+    except Exception as exc:
+        _log.error("No se pudo registrar asistente_log: %s", exc)
+    finally:
+        conn.close()
+
+
+# Turnos: qué kind es destructivo (tarjeta con CONFIRMAR tecleado)
+_KIND_TIPO = {"reasignar": "DELETE", "quitar_fecha": "DELETE", "asignar_fecha": "INSERT"}
+
+
+def _detalle_plan(kind, plan):
+    """Texto legible del plan para mostrar bajo 'Ver detalle' en la tarjeta."""
+    if kind == "reasignar":
+        fechas = plan.get("fechas_afectadas", [])
+        muestra = ", ".join(fechas[:8]) + ("…" if len(fechas) > 8 else "")
+        return (
+            f"Día: {AT._DIAS_NOMBRE[plan['dia_semana']]}  Turno: {plan['turno']}\n"
+            f"Rango: {plan['desde']} → {plan['hasta']}\n"
+            f"Fechas afectadas ({plan['n_fechas']}): {muestra}\n"
+            f"A quitar: {plan['eliminados']}  |  A agregar: {plan['insertados']}  |  "
+            f"Ya estaban (omitidos): {plan['omitidos_dup']}"
+        )
+    return plan.get("resumen", "")
+
+
+def _registrar_cambio_estructurado(sesion_id, kind, params, plan):
+    """Guarda un cambio de turnos como tarjeta pendiente (se ejecuta al confirmar)."""
+    _asegurar_esquema()
+    conn = _db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO cambios_pendientes "
+            "(sesion_id, sql, descripcion_humana, tabla, tipo, kind, payload_json) "
+            "VALUES (?, ?, ?, 'asignaciones_turnos', ?, ?, ?)",
+            (
+                sesion_id,
+                _detalle_plan(kind, plan),
+                plan.get("resumen", "Cambio de turnos"),
+                _KIND_TIPO.get(kind, "UPDATE"),
+                kind,
+                json.dumps(params, ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def _tool_turnos(nombre, inp, sesion_id):
+    """Dispatch de las tools de dominio de turnos (lectura directa, escritura → tarjeta)."""
+    conn = _db()
+    try:
+        if nombre == "consultar_empleados":
+            return AT.tool_consultar_empleados(conn, inp)
+        if nombre == "consultar_asignaciones":
+            return AT.tool_consultar_asignaciones(conn, inp)
+        if nombre == "resumen_cobertura":
+            return AT.tool_resumen_cobertura(conn, inp)
+
+        # Escritura: planificar (dry-run). Si hay error/cobertura, devolver al modelo.
+        kind = {"reasignar_turnos_recurrentes": "reasignar",
+                "asignar_turno_fecha": "asignar_fecha",
+                "quitar_turno_fecha": "quitar_fecha"}[nombre]
+        plan = AT.planear_por_kind(conn, kind, inp)
+        if not plan.get("ok"):
+            return plan
+        if plan.get("sin_cobertura"):
+            return {"ok": False, "error": "cobertura", "sin_cobertura": plan["sin_cobertura"],
+                    "mensaje": "El cambio dejaría fechas sin cobertura; ajústalo antes de proponerlo."}
+        if kind == "quitar_fecha" and plan.get("dejaria_sin_cobertura"):
+            return {"ok": False, "error": "cobertura", "mensaje": plan["resumen"] +
+                    " Dejaría el turno sin nadie; no se puede."}
+    finally:
+        conn.close()
+
+    cambio_id = _registrar_cambio_estructurado(sesion_id, kind, inp, plan)
+    return {"ok": True, "cambio_id": cambio_id, "requiere_confirmacion": True,
+            "preview": {k: plan[k] for k in plan if k not in ("ops", "nombres")}}
+
+
 # ── Implementación de tools ───────────────────────────────────────────────────
 
 def _tool_obtener_fecha_hoy(_input):
-    ahora = datetime.now()
-    import calendar as _cal
-    dias_nombre = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-    ultimo_dia = _cal.monthrange(ahora.year, ahora.month)[1]
-    return {
-        "fecha": ahora.strftime("%Y-%m-%d"),
-        "hora": ahora.strftime("%H:%M"),
-        "dia_semana": dias_nombre[ahora.weekday()],
-        "mes": ahora.month,
-        "anio": ahora.year,
-        "mes_inicio": ahora.strftime("%Y-%m-01"),
-        "mes_fin": f"{ahora.year}-{ahora.month:02d}-{ultimo_dia:02d}",
-    }
+    ctx = AT.contexto_fecha()
+    ultimo_dia = calendar.monthrange(ctx["anio"], ctx["mes"])[1]
+    ctx["mes_fin"] = f"{ctx['anio']}-{ctx['mes']:02d}-{ultimo_dia:02d}"
+    return ctx
 
 
 def _tool_ejecutar_sql(_input):
@@ -359,6 +480,12 @@ def _tool_buscar_conversaciones(_input):
     return {"ok": True, "mensajes": rows, "total": len(rows)}
 
 
+_TOOLS_TURNOS = {
+    "consultar_empleados", "consultar_asignaciones", "resumen_cobertura",
+    "reasignar_turnos_recurrentes", "asignar_turno_fecha", "quitar_turno_fecha",
+}
+
+
 def _ejecutar_tool(nombre, inp, sesion_id):
     if nombre == "obtener_fecha_hoy":
         return _tool_obtener_fecha_hoy(inp)
@@ -368,6 +495,8 @@ def _ejecutar_tool(nombre, inp, sesion_id):
         return _tool_proponer_cambio(inp, sesion_id)
     elif nombre == "buscar_conversaciones_pasadas":
         return _tool_buscar_conversaciones(inp)
+    elif nombre in _TOOLS_TURNOS:
+        return _tool_turnos(nombre, inp, sesion_id)
     return {"ok": False, "error": f"Tool desconocida: {nombre}"}
 
 
@@ -398,6 +527,7 @@ def asistente_index():
 @asistente_bp.route("/asistente/api/mensaje", methods=["POST"])
 @solo_admin
 def api_mensaje():
+    _asegurar_esquema()
     data = request.get_json(silent=True) or {}
     mensaje = (data.get("mensaje") or "").strip()
     sesion_id = (data.get("sesion_id") or "").strip()
@@ -419,7 +549,18 @@ def api_mensaje():
 
     messages = _cargar_historial_claude(sesion_id, limite=20)
 
-    client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+    # SDK con reintentos automáticos (429/5xx/timeout) con backoff exponencial.
+    client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY, max_retries=3)
+
+    # System prompt en dos bloques: el estable se cachea (~10% en requests
+    # subsecuentes); la fecha va aparte para no invalidar la caché cada minuto.
+    ctx = AT.contexto_fecha()
+    system_blocks = [
+        {"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+        {"type": "text",
+         "text": f"FECHA Y HORA ACTUAL (America/Mexico_City): {ctx['dia_semana']} "
+                 f"{ctx['fecha']}, {ctx['hora']}. Úsala para todo lo relativo."},
+    ]
 
     tokens_totales_in = tokens_totales_out = 0
     costo_total = 0.0
@@ -431,7 +572,7 @@ def api_mensaje():
             response = client.messages.create(
                 model=_MODEL,
                 max_tokens=_MAX_TOKENS,
-                system=_SYSTEM_PROMPT,
+                system=system_blocks,
                 tools=TOOLS,
                 messages=messages,
             )
@@ -463,7 +604,7 @@ def api_mensaje():
                 if block.type != "tool_use":
                     continue
                 resultado = _ejecutar_tool(block.name, block.input, sesion_id)
-                if block.name == "proponer_cambio_datos" and resultado.get("ok"):
+                if resultado.get("cambio_id"):
                     cambios_generados.append(resultado["cambio_id"])
                 tool_results.append({
                     "type": "tool_result",
@@ -476,7 +617,10 @@ def api_mensaje():
         break
 
     if respuesta_final is None:
-        respuesta_final = "No pude generar una respuesta. Intenta de nuevo."
+        respuesta_final = (
+            "Hice varias consultas pero me quedé sin cerrar la respuesta. "
+            "Dime en una frase qué necesitas exactamente y lo resuelvo."
+        )
 
     _guardar_mensaje(
         sesion_id, "assistant", respuesta_final,
@@ -493,7 +637,7 @@ def api_mensaje():
         try:
             for cid in cambios_generados:
                 row = conn.execute(
-                    "SELECT id, descripcion_humana, sql, tabla, tipo FROM cambios_pendientes WHERE id=?",
+                    "SELECT id, descripcion_humana, sql, tabla, tipo, kind FROM cambios_pendientes WHERE id=?",
                     (cid,),
                 ).fetchone()
                 if row:
@@ -512,6 +656,7 @@ def api_mensaje():
 @asistente_bp.route("/asistente/api/ejecutar_cambio/<int:cambio_id>", methods=["POST"])
 @solo_admin
 def api_ejecutar_cambio(cambio_id):
+    _asegurar_esquema()
     conn = _db()
     try:
         cambio = conn.execute(
@@ -521,7 +666,35 @@ def api_ejecutar_cambio(cambio_id):
         if not cambio:
             return jsonify({"ok": False, "error": "Cambio no encontrado o ya procesado"}), 404
 
-        # Defensa en profundidad: re-validar el SQL antes de ejecutarlo
+        kind = (cambio["kind"] if "kind" in cambio.keys() else "sql") or "sql"
+        sesion_id = cambio["sesion_id"]
+        desc = cambio["descripcion_humana"]
+
+        # ── Cambios de TURNOS: ejecución atómica en el módulo de dominio ──
+        if kind != "sql":
+            params = json.loads(cambio["payload_json"] or "{}")
+            res = AT.ejecutar_por_kind(conn, kind, params, dry_run=False)
+            if not res.get("ok"):
+                _registrar_asistente_log(sesion_id, kind, params, 0, False, res.get("error"))
+                motivo = res.get("mensaje") or res.get("error") or "No se pudo ejecutar."
+                return jsonify({"ok": False, "error": motivo}), 400
+            registros = res.get("eliminados", 0) + res.get("insertados", 0)
+            conn.execute(
+                "UPDATE cambios_pendientes SET estado='ejecutado', "
+                "fecha_resolucion=datetime('now','localtime'), registros_afectados=? WHERE id=?",
+                (registros, cambio_id),
+            )
+            conn.commit()
+            _registrar_asistente_log(sesion_id, kind, params, registros, True, None)
+            log_action(
+                "Asistente EJECUTADO(turnos) cambio_id=%d sesion=%s kind=%s registros=%d",
+                cambio_id, sesion_id[:8], kind, registros,
+            )
+            mensaje = "Listo. " + res.get("resumen", desc)
+            _guardar_mensaje(sesion_id, "assistant", mensaje)
+            return jsonify({"ok": True, "registros_afectados": registros, "mensaje": mensaje})
+
+        # ── Cambios SQL de una sola sentencia (long-tail: gastos, fondos, etc.) ──
         ok_val, err_val, _, _ = _validar_sql_cambio(cambio["sql"])
         if not ok_val:
             conn.execute(
@@ -549,11 +722,9 @@ def api_ejecutar_cambio(cambio_id):
 
         log_action(
             "Asistente EJECUTADO cambio_id=%d sesion=%s tabla=%s tipo=%s desc='%s' registros=%d",
-            cambio_id, cambio["sesion_id"][:8], cambio["tabla"],
-            cambio["tipo"], cambio["descripcion_humana"], registros,
+            cambio_id, sesion_id[:8], cambio["tabla"],
+            cambio["tipo"], desc, registros,
         )
-        sesion_id = cambio["sesion_id"]
-        desc = cambio["descripcion_humana"]
         tipo = cambio["tipo"]
     finally:
         conn.close()

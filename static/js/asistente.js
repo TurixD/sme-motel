@@ -120,9 +120,11 @@ function appendChangeCard(cambio) {
     card.dataset.cambioId = cambio.id;
     card.dataset.tipo = cambio.tipo;
 
+    var esTurnos = cambio.kind && cambio.kind !== 'sql';
+
     var tipoEl = document.createElement('div');
     tipoEl.className = 'cambio-card__tipo';
-    tipoEl.textContent = 'Cambio propuesto (' + cambio.tipo + ')';
+    tipoEl.textContent = esTurnos ? 'Plan de turnos' : ('Cambio propuesto (' + cambio.tipo + ')');
 
     var descEl = document.createElement('div');
     descEl.className = 'cambio-card__desc';
@@ -131,7 +133,7 @@ function appendChangeCard(cambio) {
     var details = document.createElement('details');
     details.className = 'cambio-card__sql-wrap';
     var summary = document.createElement('summary');
-    summary.textContent = 'Ver SQL';
+    summary.textContent = esTurnos ? 'Ver detalle' : 'Ver SQL';
     var pre = document.createElement('pre');
     pre.className = 'cambio-card__sql';
     pre.textContent = cambio.sql;

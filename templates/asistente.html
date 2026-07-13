@@ -50,10 +50,12 @@
              id="cambio-{{ cambio.id }}"
              data-cambio-id="{{ cambio.id }}"
              data-tipo="{{ cambio.tipo }}">
-            <div class="cambio-card__tipo">Cambio propuesto ({{ cambio.tipo }})</div>
+            <div class="cambio-card__tipo">
+                {% if cambio.kind and cambio.kind != 'sql' %}Plan de turnos{% else %}Cambio propuesto ({{ cambio.tipo }}){% endif %}
+            </div>
             <div class="cambio-card__desc">{{ cambio.descripcion_humana }}</div>
             <details class="cambio-card__sql-wrap">
-                <summary>Ver SQL</summary>
+                <summary>{% if cambio.kind and cambio.kind != 'sql' %}Ver detalle{% else %}Ver SQL{% endif %}</summary>
                 <pre class="cambio-card__sql">{{ cambio.sql }}</pre>
             </details>
             {% if cambio.tipo == 'DELETE' %}
