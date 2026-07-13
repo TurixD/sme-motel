@@ -74,12 +74,14 @@
         </main>
     </div>
 
+    {% if not request.path.startswith('/asistente') %}
     <!-- Reloj grande (estilo pantalla de bloqueo), arriba de Gerty -->
     <div class="lock-clock" id="lock-clock" aria-hidden="true">
         <div class="lock-clock__time">
             <span id="lock-clock-hm">--:--</span><span class="lock-clock__ampm" id="lock-clock-ampm"></span>
         </div>
     </div>
+    {% endif %}
 
     {% if not request.path.startswith('/asistente') %}
     <div class="gerty-widget" id="gerty-widget">

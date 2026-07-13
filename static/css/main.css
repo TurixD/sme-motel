@@ -112,8 +112,12 @@ a {
     margin-left: 0.35em;
     color: var(--text-secondary);
 }
-@media (max-width: 600px) {
-    .lock-clock { bottom: 232px; right: 16px; }
+/* En celular el reloj grande y Gerty tapan el contenido (la barra del teléfono
+   ya muestra la hora), así que se ocultan para buena visualización. En
+   desktop/kiosco se mantienen. */
+@media (max-width: 760px) {
+    .lock-clock,
+    .gerty-widget { display: none !important; }
 }
 
 /* --- Componente tarjeta --- */
