@@ -31,6 +31,7 @@
             <div class="app-header__brand">S<span>M</span>E</div>
             <div class="app-header__meta">
                 <span class="app-header__date">{{ fecha_actual }}</span>
+                <span class="app-header__clock" id="app-clock" title="Hora del servidor">--:--</span>
                 <span class="app-header__weather">
                     {%- from "_wx_icon.html" import wx_icon -%}
                     {{ wx_icon(clima_data.categoria, 18, True, clima_data.es_dia if clima_data.es_dia is defined else True) }}
@@ -134,6 +135,22 @@
         btnLogout.addEventListener('click', function () {
             if (confirm('¿Cerrar sesión?')) formLogout.submit();
         });
+    })();
+    </script>
+
+    <script>
+    (function () {
+        var el = document.getElementById('app-clock');
+        if (!el) return;
+        function tick() {
+            var d = new Date();
+            var hh = String(d.getHours()).padStart(2, '0');
+            var mm = String(d.getMinutes()).padStart(2, '0');
+            var ss = String(d.getSeconds()).padStart(2, '0');
+            el.textContent = hh + ':' + mm + ':' + ss;
+        }
+        tick();
+        setInterval(tick, 1000);
     })();
     </script>
 

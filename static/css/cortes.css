@@ -163,6 +163,10 @@
     color: var(--status-error);
     text-decoration: line-through;
 }
+.corte-badge--auto {
+    background: color-mix(in srgb, var(--accent-fund, #a855f7) 18%, transparent);
+    color: var(--accent-fund, #a855f7);
+}
 
 /* ── Histórico ──────────────────────────────────────────────── */
 .cortes-historico {

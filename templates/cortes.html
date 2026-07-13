@@ -33,6 +33,7 @@
                 {% elif estado == 'declarado' %}Declarado
                 {% elif estado == 'editado'   %}Editado
                 {% elif estado == 'anulado'   %}Anulado
+                {% elif estado == 'auto'      %}Automático · por aprobar
                 {% endif %}
             </span>
         </div>
@@ -55,6 +56,9 @@
             {% endif %}
             {% if estado == 'anulado' and c.confirmado_por %}
             <div class="corte-card__confirmado">Anulado por {{ c.confirmado_por }}</div>
+            {% endif %}
+            {% if estado == 'auto' %}
+            <div class="corte-card__pendiente-aviso">⚙ Generado por el sistema — un admin debe aprobarlo o ajustarlo</div>
             {% endif %}
         </div>
         {% else %}
@@ -206,7 +210,8 @@
             <dl class="corte-dl" id="det-dl"></dl>
             <div class="modal-card__actions" id="det-actions">
                 <button id="det-btn-rechazar" class="btn btn--ghost btn--danger" type="button">Anular</button>
-                <button id="det-btn-editar"   class="btn btn--primary" type="button">Editar</button>
+                <button id="det-btn-editar"   class="btn btn--ghost" type="button">Editar</button>
+                <button id="det-btn-aprobar"  class="btn btn--primary" type="button" hidden>Aprobar</button>
             </div>
             <div class="modal-card__actions" id="det-actions-cerrar" hidden>
                 <button id="det-btn-cerrar" class="btn btn--ghost" type="button">Cerrar</button>

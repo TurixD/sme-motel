@@ -283,7 +283,7 @@
     var corteActual = null;
 
     var LABEL_TURNO  = { manana: 'Mañana', tarde: 'Tarde', noche: 'Noche' };
-    var LABEL_ESTADO = { declarado: 'Declarado', editado: 'Editado', anulado: 'Anulado' };
+    var LABEL_ESTADO = { declarado: 'Declarado', editado: 'Editado', anulado: 'Anulado', auto: 'Automático · por aprobar' };
 
     function renderDl(c) {
         var filas = [
@@ -309,9 +309,12 @@
         detView.hidden     = false;
         detEdit.hidden     = true;
         detRechazar.hidden = true;
-        var editable = c.estado === 'declarado' || c.estado === 'editado';
+        var editable = c.estado === 'declarado' || c.estado === 'editado' || c.estado === 'auto';
         detActions.hidden       = !editable;
         detActionsCerrar.hidden = editable;
+        // Botón "Aprobar" solo para cortes automáticos
+        var btnAprobar = document.getElementById('det-btn-aprobar');
+        if (btnAprobar) btnAprobar.hidden = (c.estado !== 'auto');
     }
 
     function abrirModalDetalle(c) {
@@ -334,6 +337,21 @@
     var detBtnCerrar = document.getElementById('det-btn-cerrar');
     if (detBtnCerrar) detBtnCerrar.addEventListener('click', function () { modalDet.hidden = true; });
     if (modalDet) modalDet.addEventListener('click', function (e) { if (e.target === modalDet) modalDet.hidden = true; });
+
+    // Aprobar (corte automático → declarado)
+    var btnAprobar = document.getElementById('det-btn-aprobar');
+    if (btnAprobar) {
+        btnAprobar.addEventListener('click', function () {
+            if (!corteActual) return;
+            btnAprobar.disabled = true;
+            postJSON('/cortes/api/aprobar/' + corteActual.id, {})
+                .then(function (d) {
+                    if (d.ok) { location.reload(); }
+                    else { showError(detError, d.error || 'Error'); btnAprobar.disabled = false; }
+                })
+                .catch(function () { showError(detError, 'Error de red.'); btnAprobar.disabled = false; });
+        });
+    }
 
     // Anular
     var btnRechazar = document.getElementById('det-btn-rechazar');

@@ -9,7 +9,7 @@ Sueldos se manejan por separado (lógica semanal automática de v1).
 
 import sqlite3
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dtime, timedelta
 
 from flask import Blueprint, jsonify, render_template, request
 
@@ -40,7 +40,7 @@ def _noche_declarada(conn, fecha_iso: str) -> bool:
     """True si la noche de ese día operativo ya tiene corte válido."""
     return conn.execute(
         """SELECT 1 FROM cortes_turno
-           WHERE fecha = ? AND turno = 'noche' AND estado IN ('declarado', 'editado')
+           WHERE fecha = ? AND turno = 'noche' AND estado IN ('declarado', 'editado', 'auto')
            LIMIT 1""",
         (fecha_iso,),
     ).fetchone() is not None
@@ -78,10 +78,10 @@ def _db():
 # ── Cálculo de bruto ──────────────────────────────────────────
 
 def _declarado_at(conn, fecha: str, turno: str):
-    """Hora de declaración del corte de un turno (si está declarado/editado)."""
+    """Hora de declaración del corte de un turno (declarado/editado/auto)."""
     row = conn.execute(
         """SELECT declarado_at FROM cortes_turno
-           WHERE fecha = ? AND turno = ? AND estado IN ('declarado', 'editado') LIMIT 1""",
+           WHERE fecha = ? AND turno = ? AND estado IN ('declarado', 'editado', 'auto') LIMIT 1""",
         (fecha, turno),
     ).fetchone()
     return row["declarado_at"] if row and row["declarado_at"] else None
@@ -246,7 +246,7 @@ def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
         r["turno"]: float(r["bruto_declarado"])
         for r in conn.execute(
             """SELECT turno, bruto_declarado FROM cortes_turno
-               WHERE fecha = ? AND estado IN ('declarado', 'editado')""",
+               WHERE fecha = ? AND estado IN ('declarado', 'editado', 'auto')""",
             (fecha,),
         ).fetchall()
     }
@@ -292,6 +292,71 @@ def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
     return {"ok": True, "efectivo": efectivo, "tarjeta": tarjeta, "total_neto": total_neto}
 
 
+# ── Auto-corte (si nadie declara al llegar la hora límite) ────────
+
+# Por turno: cierre = fin de su ventana (límite del cálculo, offset_días + hora);
+# limite = hora a partir de la cual, si no hay corte, el sistema lo genera solo.
+_AUTO_TURNOS = {
+    "manana": {"cierre": (0, dtime(16, 59, 59)), "limite": (0, 17)},
+    "tarde":  {"cierre": (0, dtime(23, 59, 59)), "limite": (1,  0)},
+    "noche":  {"cierre": (1, dtime(8,  0,  0)),  "limite": (1, 10)},
+}
+
+
+def _auto_cortes(conn, now=None) -> int:
+    """
+    Genera cortes AUTOMÁTICOS (estado 'auto', por aprobar) de los turnos que ya
+    pasaron su hora límite sin declararse, en los últimos días operativos. Usa la
+    ventana FIJA del turno (no la extendida) y los deja listos para que un admin
+    los apruebe/edite/anule. Cuenta provisionalmente en el ingreso del día.
+    """
+    now = now or datetime.now()
+    fechas_tocadas = set()
+    for base in (now.date() - timedelta(days=1), now.date()):
+        for turno, cfg in _AUTO_TURNOS.items():
+            ld, lh = cfg["limite"]
+            limite = datetime.combine(base + timedelta(days=ld), dtime(hour=lh))
+            if now < limite:
+                continue
+            fecha = base.isoformat()
+            if conn.execute(
+                "SELECT 1 FROM cortes_turno WHERE fecha=? AND turno=? LIMIT 1", (fecha, turno)
+            ).fetchone():
+                continue  # ya existe corte (declarado/auto/anulado) — no recrear
+
+            r = _calcular_corte(conn, turno, fecha)  # ventana fija (topada) por _limites_turnos
+            emp = conn.execute(
+                """SELECT a.empleado_id AS eid FROM asignaciones_turnos a
+                   JOIN turnos t ON t.id = a.turno_id
+                   WHERE a.fecha=? AND t.nombre=? LIMIT 1""",
+                (fecha, turno),
+            ).fetchone()
+            if not emp:
+                emp = conn.execute(
+                    "SELECT id AS eid FROM empleados WHERE activo=1 ORDER BY id LIMIT 1"
+                ).fetchone()
+            if not emp:
+                continue
+            cd, ch = cfg["cierre"]
+            cierre_at = f"{(base + timedelta(days=cd)).isoformat()} {ch.strftime('%H:%M:%S')}"
+            conn.execute(
+                """INSERT INTO cortes_turno
+                   (fecha, turno, empleado_id, bruto_calculado, bruto_declarado,
+                    estado, declarado_at, declarado_por_nombre, notas)
+                   VALUES (?,?,?,?,?,'auto',?,?,?)""",
+                (fecha, turno, emp["eid"], r["neto"], r["neto"], cierre_at,
+                 "Sistema (automático)", "Corte generado automáticamente — por aprobar"),
+            )
+            log_action("Corte AUTO generado turno=%s fecha=%s neto=%.2f", turno, fecha, r["neto"])
+            fechas_tocadas.add(fecha)
+
+    for fecha in fechas_tocadas:
+        _actualizar_ingresos_diarios(conn, fecha)
+    if fechas_tocadas:
+        conn.commit()
+    return len(fechas_tocadas)
+
+
 # ── Vista principal ───────────────────────────────────────────
 
 @cortes_bp.route("/cortes")
@@ -300,6 +365,8 @@ def index():
     es_admin = modo.startswith("admin_")
 
     with _db() as conn:
+        _auto_cortes(conn)   # genera cortes automáticos de turnos vencidos sin declarar
+
         # Día operativo efectivo: se mantiene el ciclo anterior hasta que su
         # corte de noche esté hecho (o hasta las 10am), para que el corte de la
         # noche y la lista no se reinicien a cero al dar las 8am.
@@ -555,6 +622,36 @@ def api_anular(corte_id):
 
     log_action("Corte ANULADO id=%d turno=%s fecha=%s por=%s motivo=%s",
                corte_id, corte["turno"], corte["fecha"], modo, motivo or "(sin motivo)")
+    return jsonify({"ok": True})
+
+
+# ── API: aprobar corte automático (admin) ─────────────────────
+
+@cortes_bp.route("/cortes/api/aprobar/<int:corte_id>", methods=["POST"])
+@solo_admin
+def api_aprobar(corte_id):
+    modo  = _get_modo()
+    ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with _db() as conn:
+        corte = conn.execute(
+            "SELECT turno, fecha, estado FROM cortes_turno WHERE id=?", (corte_id,)
+        ).fetchone()
+        if not corte:
+            return jsonify({"ok": False, "error": "Corte no encontrado"}), 404
+        if corte["estado"] != "auto":
+            return jsonify({"ok": False, "error": "Solo se aprueban cortes automáticos"}), 400
+
+        # Aprobar = confirmarlo tal cual (pasa a 'declarado', deja de estar pendiente)
+        conn.execute(
+            "UPDATE cortes_turno SET estado='declarado', editado_por=?, editado_at=? WHERE id=?",
+            (modo, ahora, corte_id),
+        )
+        _actualizar_ingresos_diarios(conn, corte["fecha"])
+        conn.commit()
+
+    log_action("Corte AUTO aprobado id=%d turno=%s fecha=%s por=%s",
+               corte_id, corte["turno"], corte["fecha"], modo)
     return jsonify({"ok": True})
 
 

@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, render_template, request
 from config import Config
 from logger import log_action
 from modules.auth import solo_admin, _get_modo
-from modules.cortes import _calcular_bruto, dia_operativo_efectivo  # franjas + día operativo efectivo
+from modules.cortes import _auto_cortes, _calcular_bruto, dia_operativo_efectivo
 
 cuartos_bp = Blueprint("cuartos", __name__)
 
@@ -129,6 +129,7 @@ def api_actividad_dia():
     modo = _modo_actual()
     es_admin = modo.startswith("admin_")
     with _db() as conn:
+        _auto_cortes(conn)   # heartbeat: genera cortes automáticos vencidos
         items = _actividad_dia(conn, es_admin)
         contadores = _contadores_dia_operativo(conn)
     return jsonify({"ok": True, "items": items, "es_admin": es_admin, "contadores": contadores})
