@@ -26,8 +26,8 @@ _FRANJA_INICIO = {"manana": "08:00:00", "tarde": "16:00:00"}
 _FRANJA_FIN    = {"manana": "15:59:59", "tarde": "22:59:59"}
 
 # Ventanas horarias para que el EMPLEADO pueda declarar (hora inicio inclusiva, fin inclusiva)
-_VENTANA_HORAS = {"manana": (15, 16), "tarde": (22, 23), "noche": (7, 8)}
-_VENTANA_LABEL = {"manana": "Ventana: 15:00 – 17:00", "tarde": "Ventana: 22:00 – 00:00", "noche": "Ventana: 07:00 – 09:00"}
+_VENTANA_HORAS = {"manana": (15, 16), "tarde": (22, 23), "noche": (7, 9)}
+_VENTANA_LABEL = {"manana": "Ventana: 15:00 – 17:00", "tarde": "Ventana: 22:00 – 00:00", "noche": "Ventana: 07:00 – 10:00"}
 
 
 def _ventanas_activas() -> dict:
@@ -36,6 +36,35 @@ def _ventanas_activas() -> dict:
         t: (inicio <= hora <= fin)
         for t, (inicio, fin) in _VENTANA_HORAS.items()
     }
+
+
+def _noche_declarada(conn, fecha_iso: str) -> bool:
+    """True si la noche de ese día operativo ya tiene corte válido."""
+    return conn.execute(
+        """SELECT 1 FROM cortes_turno
+           WHERE fecha = ? AND turno = 'noche' AND estado IN ('declarado', 'editado')
+           LIMIT 1""",
+        (fecha_iso,),
+    ).fetchone() is not None
+
+
+def dia_operativo_efectivo(conn, now=None):
+    """
+    Día operativo que debe MOSTRARSE, considerando el corte de la noche pendiente.
+
+    El ciclo (08:00–08:00) no se "completa" solo por dar las 8am: se mantiene el
+    ciclo anterior hasta que su corte de noche esté hecho, o hasta las 10am como
+    tope. Así, si la noche se corta tarde (8–10am), la lista y el corte siguen
+    mostrando los cuartos del ciclo en vez de reiniciarse a cero.
+    """
+    now = now or datetime.now()
+    hoy = now.date()
+    if now.hour < 8:
+        return hoy - timedelta(days=1)          # madrugada: noche del ciclo anterior en curso
+    prev = hoy - timedelta(days=1)              # ciclo cuya noche terminó a las 8am de hoy
+    if now.hour < 10 and not _noche_declarada(conn, prev.isoformat()):
+        return prev                             # esperar el corte de la noche (margen 8–10am)
+    return hoy
 
 
 @contextmanager
@@ -231,14 +260,14 @@ def index():
     modo     = _get_modo()
     es_admin = modo.startswith("admin_")
 
-    # Los tres turnos pertenecen al MISMO día operativo (08:00–08:00). Entre
-    # 00:00 y 07:59 aún es el día operativo anterior, así que la página muestra
-    # y declara los cortes de ese día (incluida la noche que se está trabajando).
-    op       = dia_operativo()
-    hoy      = op.isoformat()          # día operativo (etiqueta + fecha de manana/tarde)
-    fecha_noche = hoy                   # la noche pertenece al mismo día operativo
-
     with _db() as conn:
+        # Día operativo efectivo: se mantiene el ciclo anterior hasta que su
+        # corte de noche esté hecho (o hasta las 10am), para que el corte de la
+        # noche y la lista no se reinicien a cero al dar las 8am.
+        op       = dia_operativo_efectivo(conn)
+        hoy      = op.isoformat()        # día operativo (etiqueta + fecha de los 3 turnos)
+        fecha_noche = hoy                 # la noche pertenece al mismo día operativo
+
         # Cargar los tres turnos del día operativo
         cortes_rows = conn.execute(
             """SELECT ct.*, e.nombre AS emp_nombre

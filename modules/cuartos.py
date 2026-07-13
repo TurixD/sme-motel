@@ -11,8 +11,7 @@ from flask import Blueprint, jsonify, render_template, request
 from config import Config
 from logger import log_action
 from modules.auth import solo_admin, _get_modo
-from modules.cortes import _calcular_bruto  # reutiliza franjas horarias por turno
-from modules.tiempo import dia_operativo
+from modules.cortes import _calcular_bruto, dia_operativo_efectivo  # franjas + día operativo efectivo
 
 cuartos_bp = Blueprint("cuartos", __name__)
 
@@ -44,7 +43,7 @@ def _contadores_dia_operativo(conn) -> dict:
     La fecha operativa es hoy, salvo entre 00:00 y 07:59, que aún pertenece a la
     noche del día operativo anterior (mismo criterio que el corte de noche).
     """
-    fecha = dia_operativo().isoformat()
+    fecha = dia_operativo_efectivo(conn).isoformat()
     return {
         t: _calcular_bruto(conn, t, fecha)["count_rentas"]
         for t in ("manana", "tarde", "noche")
@@ -57,7 +56,7 @@ def _actividad_dia(conn, es_admin: bool) -> list[dict]:
     calendario. Así la lista no se reinicia a medianoche: sigue mostrando la
     actividad del ciclo hasta las 8am, igual que el contador de rentas.
     """
-    op_day    = dia_operativo()
+    op_day    = dia_operativo_efectivo(conn)
     fecha     = op_day.isoformat()
     fecha_sig = (op_day + timedelta(days=1)).isoformat()
 
