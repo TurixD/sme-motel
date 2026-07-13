@@ -144,10 +144,12 @@
         if (!el) return;
         function tick() {
             var d = new Date();
-            var hh = String(d.getHours()).padStart(2, '0');
+            var h = d.getHours();
+            var ampm = h < 12 ? 'a.m.' : 'p.m.';
+            var h12 = h % 12; if (h12 === 0) h12 = 12;
             var mm = String(d.getMinutes()).padStart(2, '0');
             var ss = String(d.getSeconds()).padStart(2, '0');
-            el.textContent = hh + ':' + mm + ':' + ss;
+            el.textContent = h12 + ':' + mm + ':' + ss + ' ' + ampm;
         }
         tick();
         setInterval(tick, 1000);
