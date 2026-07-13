@@ -31,7 +31,6 @@
             <div class="app-header__brand">S<span>M</span>E</div>
             <div class="app-header__meta">
                 <span class="app-header__date">{{ fecha_actual }}</span>
-                <span class="app-header__clock" id="app-clock" title="Hora del servidor">--:--</span>
                 <span class="app-header__weather">
                     {%- from "_wx_icon.html" import wx_icon -%}
                     {{ wx_icon(clima_data.categoria, 18, True, clima_data.es_dia if clima_data.es_dia is defined else True) }}
@@ -73,6 +72,13 @@
         <main>
             {% block content %}{% endblock %}
         </main>
+    </div>
+
+    <!-- Reloj grande (estilo pantalla de bloqueo), arriba de Gerty -->
+    <div class="lock-clock" id="lock-clock" aria-hidden="true">
+        <div class="lock-clock__time">
+            <span id="lock-clock-hm">--:--</span><span class="lock-clock__ampm" id="lock-clock-ampm"></span>
+        </div>
     </div>
 
     {% if not request.path.startswith('/asistente') %}
@@ -140,16 +146,17 @@
 
     <script>
     (function () {
-        var el = document.getElementById('app-clock');
-        if (!el) return;
+        var hm = document.getElementById('lock-clock-hm');
+        var ap = document.getElementById('lock-clock-ampm');
+        if (!hm) return;
         function tick() {
             var d = new Date();
             var h = d.getHours();
             var ampm = h < 12 ? 'a.m.' : 'p.m.';
             var h12 = h % 12; if (h12 === 0) h12 = 12;
             var mm = String(d.getMinutes()).padStart(2, '0');
-            var ss = String(d.getSeconds()).padStart(2, '0');
-            el.textContent = h12 + ':' + mm + ':' + ss + ' ' + ampm;
+            hm.textContent = h12 + ':' + mm;
+            if (ap) ap.textContent = ampm;
         }
         tick();
         setInterval(tick, 1000);

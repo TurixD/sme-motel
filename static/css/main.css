@@ -86,16 +86,34 @@ a {
     gap: var(--space-2);
 }
 
-.app-header__clock {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
+/* Reloj grande estilo pantalla de bloqueo (arriba de Gerty) */
+.lock-clock {
+    position: fixed;
+    right: 22px;
+    bottom: 250px;             /* justo arriba de Gerty (bottom 90 + alto ~147) */
+    z-index: 79;
+    text-align: right;
+    pointer-events: none;
+    user-select: none;
+}
+.lock-clock__time {
+    font-family: 'M PLUS Rounded 1c', var(--font-sans);
+    font-weight: 400;
+    line-height: 1;
     color: var(--text-primary);
-    background-color: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    padding: var(--space-2) var(--space-4);
+    font-size: clamp(2.6rem, 7vw, 3.8rem);
     letter-spacing: 0.5px;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+.lock-clock__ampm {
+    font-size: 0.3em;
+    font-weight: 500;
+    margin-left: 0.35em;
+    color: var(--text-secondary);
+}
+@media (max-width: 600px) {
+    .lock-clock { bottom: 232px; right: 16px; }
 }
 
 /* --- Componente tarjeta --- */
