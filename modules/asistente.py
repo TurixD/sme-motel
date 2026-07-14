@@ -101,8 +101,8 @@ REGLAS CLAVE (síguelas siempre):
 
 REGLAS DE NEGOCIO:
 - Utilidades 50/50 Turi y Gabriel.
-- Renta $10,000 semanal (cada domingo automático) + $40,000 mensual.
-- Fondos: Reserva general, CFE, Renta. Luz→fondo CFE; Renta→fondo Renta; Mantenimiento/Otro→Reserva (si confirma).
+- Renta: ~$10,000 semanal + ~$40,000 mensual. La renta es un gasto normal que sale del dinero de la semana (ya NO hay fondo de Renta).
+- Los gastos por defecto salen del "dinero de la semana" (bajan la utilidad = ingresos − gastos). Los fondos (Reserva, CFE, etc.) son ahorros aparte y OPCIONALES: un gasto solo descuenta de un fondo si el usuario lo eligió (gastos_extras.fondo_descontado_id). Los fondos se pueden crear/borrar desde la pantalla Fondos.
 - Un empleado NO debe tener dos turnos el mismo día. Antes de agregar, verifica con consultar_asignaciones.
 - Los sueldos (turnos.sueldo: $400 mañana/tarde, $500 noche) YA se descuentan en los cortes de turno: ingresos_diarios.total_neto es NETO de sueldos. NUNCA vuelvas a restar la nómina de los ingresos ni de la utilidad.
 

@@ -156,6 +156,18 @@
                       id="descripcion" name="descripcion" rows="2"
                       placeholder="Detalle del gasto…"></textarea>
         </div>
+        <div class="field-group">
+            <label class="field-label" for="fondo-origen">Pagado desde</label>
+            <select class="field-input field-input--sm" id="fondo-origen" style="max-width:280px">
+                <option value="">Dinero de la semana</option>
+                {% for f in fondos %}
+                <option value="{{ f.id }}">Fondo: {{ f.nombre }}</option>
+                {% endfor %}
+            </select>
+            <span class="field-optional" style="display:block;margin-top:var(--space-1)">
+                Por defecto sale del dinero de la semana. Elige un fondo solo si lo pagaste de ahí.
+            </span>
+        </div>
         <input type="hidden" id="recibo-id-hidden" value="">
         <button type="submit" class="btn btn--expense btn--full" id="btn-registrar">
             Registrar gasto
@@ -244,39 +256,6 @@
     {% endif %}
 </div>
 
-<!-- Modal: confirmar descuento de fondo (Mantenimiento / Otro) -->
-<div id="modal-fondo-confirm" class="modal" role="dialog" aria-modal="true" hidden>
-    <div class="modal__backdrop"></div>
-    <div class="modal__box">
-        <h3 class="modal__title">¿Descontar del fondo?</h3>
-        <p style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:var(--space-4)">
-            El gasto de <strong id="fondo-monto-txt" style="color:var(--accent-expense)">$0</strong>
-            puede descontarse del fondo <strong id="fondo-nombre-txt">Reserva general</strong>.
-        </p>
-        <div style="background:var(--bg-tertiary);border-radius:var(--radius-md);padding:var(--space-4);margin-bottom:var(--space-4)">
-            <div style="display:flex;justify-content:space-between;font-size:var(--text-sm);margin-bottom:var(--space-2)">
-                <span style="color:var(--text-secondary)">Saldo actual</span>
-                <span id="fondo-saldo-actual" style="font-family:var(--font-mono);font-weight:600">$0</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:var(--text-sm)">
-                <span style="color:var(--text-secondary)">Después del descuento</span>
-                <span id="fondo-saldo-post" style="font-family:var(--font-mono);font-weight:600">$0</span>
-            </div>
-        </div>
-        <div id="fondo-warn-neg" hidden
-             style="background:rgba(255,184,77,0.08);border:1px solid rgba(255,184,77,0.3);
-                    border-left:3px solid var(--status-warning);border-radius:var(--radius-md);
-                    padding:var(--space-3) var(--space-4);font-size:var(--text-sm);
-                    color:var(--status-warning);margin-bottom:var(--space-4)">
-            ⚠ El saldo del fondo quedaría negativo
-        </div>
-        <div class="modal__actions">
-            <button class="btn btn--expense" id="btn-si-descontar">Sí, descontar</button>
-            <button class="btn btn--ghost"   id="btn-no-descontar">No, solo registrar</button>
-        </div>
-    </div>
-</div>
-
 <!-- Modal: editar gasto -->
 <div id="modal-editar" class="modal" role="dialog" aria-modal="true" hidden>
     <div class="modal__backdrop"></div>
@@ -353,9 +332,7 @@
 const CHART_DATA           = {{ chart_data           | tojson }};
 const HISTORIAL            = {{ historial            | tojson }};
 const CATEGORIAS           = {{ categorias           | tojson }};
-const FONDO_RESERVA_ID     = {{ fondo_reserva_id     | tojson }};
 const CATALOGO_INVENTARIO  = {{ catalogo_inventario  | tojson }};
-const CATS_PEDIR_RESERVA   = ['Mantenimiento', 'Otro'];
 
 /* ─── Colores por categoría (de la paleta del SPEC) ─────── */
 const CAT_COLORS = {
@@ -416,33 +393,6 @@ document.addEventListener('keydown', e => {
         document.querySelectorAll('.modal:not([hidden])').forEach(m => closeModal(m.id));
 });
 
-/* ─── Modal pre-confirmación fondo ──────────────────────── */
-let _resolveFondoModal = null;
-
-function mostrarModalFondo(monto, saldoActual, nombreFondo) {
-    return new Promise(function (resolve) {
-        _resolveFondoModal = resolve;
-        document.getElementById('fondo-monto-txt').textContent  = fmtSaldo(monto);
-        document.getElementById('fondo-nombre-txt').textContent = nombreFondo;
-        document.getElementById('fondo-saldo-actual').textContent = fmtSaldo(saldoActual);
-        const saldoPost = saldoActual - monto;
-        const elPost = document.getElementById('fondo-saldo-post');
-        elPost.textContent = fmtSaldo(saldoPost);
-        elPost.style.color = saldoPost < 0 ? 'var(--accent-expense)' : '';
-        document.getElementById('fondo-warn-neg').hidden = saldoPost >= 0;
-        openModal('modal-fondo-confirm');
-    });
-}
-
-document.getElementById('btn-si-descontar').addEventListener('click', () => {
-    closeModal('modal-fondo-confirm');
-    if (_resolveFondoModal) { _resolveFondoModal(true);  _resolveFondoModal = null; }
-});
-document.getElementById('btn-no-descontar').addEventListener('click', () => {
-    closeModal('modal-fondo-confirm');
-    if (_resolveFondoModal) { _resolveFondoModal(false); _resolveFondoModal = null; }
-});
-
 /* ─── Banner warning saldo negativo ─────────────────────── */
 function showFondoWarning(nombreFondo, saldo) {
     let sec = document.querySelector('.alertas-section');
@@ -470,29 +420,18 @@ document.getElementById('form-gasto').addEventListener('submit', async e => {
     const btn = document.getElementById('btn-registrar');
 
     const reciboId = document.getElementById('recibo-id-hidden').value;
+    const fondoId  = document.getElementById('fondo-origen').value;
     const data = {
         fecha:       document.getElementById('fecha').value,
         categoria:   document.getElementById('categoria').value,
         monto:       parseFloat(document.getElementById('monto').value) || 0,
         descripcion: document.getElementById('descripcion').value.trim(),
         ...(reciboId ? { recibo_id: parseInt(reciboId, 10) } : {}),
+        ...(fondoId  ? { fondo_id:  parseInt(fondoId, 10) }  : {}),
     };
 
     if (!data.categoria) {
         toast('Selecciona una categoría', 'error'); return;
-    }
-
-    // Pre-confirmación para Mantenimiento / Otro
-    let descontar_fondo = false;
-    if (CATS_PEDIR_RESERVA.includes(data.categoria) && FONDO_RESERVA_ID) {
-        btn.disabled = true; btn.textContent = 'Verificando fondo…';
-        try {
-            const sr = await fetch('/fondos/' + FONDO_RESERVA_ID + '/saldo').then(r => r.json());
-            btn.disabled = false; btn.textContent = 'Registrar gasto';
-            if (sr.ok) descontar_fondo = await mostrarModalFondo(data.monto, sr.saldo, sr.nombre);
-        } catch {
-            btn.disabled = false; btn.textContent = 'Registrar gasto';
-        }
     }
 
     btn.disabled = true; btn.textContent = 'Registrando…';
@@ -502,7 +441,7 @@ document.getElementById('form-gasto').addEventListener('submit', async e => {
         res = await fetch('/gastos/registrar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(Object.assign({}, data, { descontar_fondo })),
+            body: JSON.stringify(data),
         }).then(r => r.json());
     } catch {
         toast('Error de conexión', 'error');

@@ -217,6 +217,89 @@ def api_movimientos(fondo_id):
     return jsonify({"ok": True, "movimientos": movs, "count": count})
 
 
+# ── API: crear fondo ──────────────────────────────────────────
+
+_PALETA_FONDOS = ["#7BB8FF", "#5EE8B4", "#A78BFA", "#FFB84D", "#FF7A8A", "#C084FC", "#22C55E"]
+
+
+@fondos_bp.route("/fondos/crear", methods=["POST"])
+@solo_admin
+def crear():
+    data   = request.get_json(silent=True) or {}
+    nombre = (data.get("nombre") or "").strip()
+    if not nombre:
+        return jsonify({"ok": False, "error": "El nombre es obligatorio"}), 400
+
+    descripcion = (data.get("descripcion") or "").strip()
+    color       = (data.get("color") or "").strip()
+
+    def _num(v):
+        try:
+            return max(0.0, float(v))
+        except (TypeError, ValueError):
+            return 0.0
+
+    meta   = _num(data.get("meta_mensual"))
+    aporte = _num(data.get("aporte_periodico"))
+    minimo = _num(data.get("minimo_seguro"))
+
+    with _db() as db:
+        existe = db.execute(
+            "SELECT id FROM fondos WHERE nombre=? AND activo=1", (nombre,)
+        ).fetchone()
+        if existe:
+            return jsonify({"ok": False, "error": f"Ya existe un fondo llamado '{nombre}'"}), 400
+
+        if not color:
+            n = db.execute("SELECT COUNT(*) c FROM fondos").fetchone()["c"]
+            color = _PALETA_FONDOS[n % len(_PALETA_FONDOS)]
+
+        # Si tiene aporte, se muestra en el banner de aportes semanales
+        freq        = "semanal" if aporte > 0 else None
+        pregunta    = 1 if aporte > 0 else 0
+
+        cur = db.execute(
+            "INSERT INTO fondos "
+            "(nombre, descripcion, meta_mensual, minimo_seguro, aporte_periodico, "
+            " frecuencia_aporte, pregunta_antes, color, activo) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
+            (nombre, descripcion, meta, minimo, aporte, freq, pregunta, color),
+        )
+        db.commit()
+        nuevo_id = cur.lastrowid
+
+    log_action("Fondo creado: id=%d '%s' meta=$%.0f aporte=$%.0f", nuevo_id, nombre, meta, aporte)
+    return jsonify({"ok": True, "id": nuevo_id})
+
+
+# ── API: borrar fondo (con sus movimientos; desenlaza gastos) ─
+
+@fondos_bp.route("/fondos/<int:fondo_id>/eliminar", methods=["POST"])
+@solo_admin
+def eliminar(fondo_id):
+    with _db() as db:
+        fondo = db.execute("SELECT nombre FROM fondos WHERE id=?", (fondo_id,)).fetchone()
+        if not fondo:
+            return jsonify({"ok": False, "error": "Fondo no encontrado"}), 404
+
+        n_movs = db.execute(
+            "SELECT COUNT(*) c FROM movimientos_fondos WHERE fondo_id=?", (fondo_id,)
+        ).fetchone()["c"]
+
+        # Desenlaza los gastos que apuntaban a este fondo (el gasto se conserva)
+        db.execute(
+            "UPDATE gastos_extras SET fondo_descontado_id=NULL WHERE fondo_descontado_id=?",
+            (fondo_id,),
+        )
+        db.execute("DELETE FROM movimientos_fondos WHERE fondo_id=?", (fondo_id,))
+        db.execute("DELETE FROM metas_fondo WHERE fondo_id=?", (fondo_id,))
+        db.execute("DELETE FROM fondos WHERE id=?", (fondo_id,))
+        db.commit()
+
+    log_action("Fondo eliminado: id=%d '%s' (%d movimientos borrados)", fondo_id, fondo["nombre"], n_movs)
+    return jsonify({"ok": True})
+
+
 # ── API: depósito manual ──────────────────────────────────────
 
 @fondos_bp.route("/fondos/<int:fondo_id>/depositar", methods=["POST"])

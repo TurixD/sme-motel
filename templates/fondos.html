@@ -10,6 +10,10 @@
 
 <div class="page-header">
     <h1 class="page-title">Fondos</h1>
+    <button class="btn btn--fund btn--sm" id="btn-nuevo-fondo">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nuevo fondo
+    </button>
 </div>
 
 <!-- ── Aportes pendientes de la semana ───────────────────────── -->
@@ -122,6 +126,11 @@
             <button class="btn btn--ghost btn--sm" id="btn-movs-{{ f.id }}">
                 Movimientos ({{ f.movimientos | length }})
             </button>
+            <button class="btn btn--ghost btn--sm btn-eliminar-fondo"
+                    data-fondo-id="{{ f.id }}" data-fondo-nombre="{{ f.nombre }}"
+                    style="margin-left:auto;color:var(--status-error)" title="Eliminar fondo">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
         </div>
 
         <!-- Movimientos recientes (ocultos por defecto) -->
@@ -205,6 +214,51 @@
         <div class="modal__actions">
             <button class="btn btn--fund" id="btn-modal-guardar">Guardar</button>
             <button class="btn btn--ghost" id="btn-modal-cancelar">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal crear fondo ─────────────────────────────────────── -->
+<div class="modal" id="modal-nuevo-fondo" hidden>
+    <div class="modal__backdrop" id="modal-nuevo-backdrop"></div>
+    <div class="modal__box">
+        <h2 class="modal__title">Nuevo fondo</h2>
+        <div class="field-group">
+            <label class="field-label" for="nf-nombre">Nombre</label>
+            <input class="field-input" type="text" id="nf-nombre" placeholder="Ej. Impuestos, Nómina, Ahorro…">
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="nf-descripcion">
+                Descripción <span class="field-optional">(opcional)</span>
+            </label>
+            <input class="field-input" type="text" id="nf-descripcion" placeholder="Para qué es este fondo">
+        </div>
+        <div class="form-row-2">
+            <div class="field-group">
+                <label class="field-label" for="nf-meta">
+                    Meta mensual <span class="field-optional">(opcional)</span>
+                </label>
+                <div class="input-prefix">
+                    <span class="prefix-symbol">$</span>
+                    <input class="field-input mono" type="number" id="nf-meta" min="0" step="any" placeholder="0">
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="nf-aporte">
+                    Aporte semanal <span class="field-optional">(opcional)</span>
+                </label>
+                <div class="input-prefix">
+                    <span class="prefix-symbol">$</span>
+                    <input class="field-input mono" type="number" id="nf-aporte" min="0" step="any" placeholder="0">
+                </div>
+            </div>
+        </div>
+        <span class="field-optional" style="display:block;margin-bottom:var(--space-3)">
+            Si pones aporte semanal, el fondo aparecerá en "Aportes pendientes" cada semana.
+        </span>
+        <div class="modal__actions">
+            <button class="btn btn--fund" id="btn-guardar-fondo">Crear fondo</button>
+            <button class="btn btn--ghost" id="btn-cancelar-fondo">Cancelar</button>
         </div>
     </div>
 </div>
@@ -488,6 +542,72 @@ var APORTES_DATA = {{ aportes_pendientes | tojson }};
                 .catch(function () { btnConfSalt.disabled = false; showToast('Error de red', 'error'); });
             });
         }
+    });
+
+    // ── Crear fondo ───────────────────────────────────────────
+
+    var modalNuevo = document.getElementById('modal-nuevo-fondo');
+
+    function abrirNuevoFondo() {
+        document.getElementById('nf-nombre').value      = '';
+        document.getElementById('nf-descripcion').value = '';
+        document.getElementById('nf-meta').value        = '';
+        document.getElementById('nf-aporte').value      = '';
+        modalNuevo.removeAttribute('hidden');
+        setTimeout(function () { document.getElementById('nf-nombre').focus(); }, 50);
+    }
+    function cerrarNuevoFondo() { modalNuevo.setAttribute('hidden', ''); }
+
+    document.getElementById('btn-nuevo-fondo').addEventListener('click', abrirNuevoFondo);
+    document.getElementById('btn-cancelar-fondo').addEventListener('click', cerrarNuevoFondo);
+    document.getElementById('modal-nuevo-backdrop').addEventListener('click', cerrarNuevoFondo);
+
+    document.getElementById('btn-guardar-fondo').addEventListener('click', function () {
+        var nombre = document.getElementById('nf-nombre').value.trim();
+        if (!nombre) { showToast('Ponle un nombre al fondo', 'error'); return; }
+        var btn = this;
+        btn.disabled = true;
+
+        fetch('/fondos/crear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nombre:            nombre,
+                descripcion:       document.getElementById('nf-descripcion').value.trim(),
+                meta_mensual:      parseFloat(document.getElementById('nf-meta').value)   || 0,
+                aporte_periodico:  parseFloat(document.getElementById('nf-aporte').value) || 0,
+            }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            btn.disabled = false;
+            if (!data.ok) { showToast(data.error || 'Error al crear', 'error'); return; }
+            showToast('Fondo creado', 'success');
+            setTimeout(function () { location.reload(); }, 700);
+        })
+        .catch(function () { btn.disabled = false; showToast('Error de red', 'error'); });
+    });
+
+    // ── Eliminar fondo ────────────────────────────────────────
+
+    document.querySelectorAll('.btn-eliminar-fondo').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id     = btn.dataset.fondoId;
+            var nombre = btn.dataset.fondoNombre;
+            if (!confirm('¿Eliminar el fondo "' + nombre + '"?\n\n'
+                + 'Se borrarán sus movimientos y los gastos que salían de él pasarán a '
+                + '"dinero de la semana". Esta acción no se puede deshacer.')) return;
+            btn.disabled = true;
+
+            fetch('/fondos/' + id + '/eliminar', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.ok) { btn.disabled = false; showToast(data.error || 'Error', 'error'); return; }
+                showToast('Fondo eliminado', 'success');
+                setTimeout(function () { location.reload(); }, 700);
+            })
+            .catch(function () { btn.disabled = false; showToast('Error de red', 'error'); });
+        });
     });
 
 }());

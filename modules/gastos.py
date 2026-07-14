@@ -98,10 +98,6 @@ def _normalizar_sku(sku_raw) -> str | None:
         return sku_str
     return None
 
-_CATEGORIAS_CON_FONDO     = {"Luz": "CFE", "Renta": "Renta"}
-_CATEGORIAS_PEDIR_RESERVA = {"Mantenimiento", "Otro"}
-
-
 @contextmanager
 def _db():
     conn = sqlite3.connect(Config.DB_PATH)
@@ -120,6 +116,36 @@ def _saldo_fondo(db, fondo_id: int) -> float:
         (fondo_id,),
     ).fetchone()
     return float(row["s"])
+
+
+def _descontar_de_fondo(db, fondo_id, monto, fecha, concepto, gasto_id):
+    """
+    Descuenta un gasto de un fondo SOLO si el usuario lo eligió (fondo_id válido).
+    Por defecto los gastos salen del dinero de la semana y no tocan ningún fondo.
+    Devuelve (fondo_row, saldo) o (None, None) si no aplica.
+    """
+    if not fondo_id:
+        return None, None
+    try:
+        fid = int(fondo_id)
+    except (TypeError, ValueError):
+        return None, None
+    fondo_row = db.execute(
+        "SELECT id, nombre FROM fondos WHERE id=? AND activo=1", (fid,)
+    ).fetchone()
+    if not fondo_row:
+        return None, None
+    db.execute(
+        "INSERT INTO movimientos_fondos "
+        "(fondo_id, fecha, tipo, monto, concepto, gasto_extra_id) "
+        "VALUES (?, ?, 'retiro', ?, ?, ?)",
+        (fondo_row["id"], fecha, monto, concepto, gasto_id),
+    )
+    db.execute(
+        "UPDATE gastos_extras SET fondo_descontado_id=? WHERE id=?",
+        (fondo_row["id"], gasto_id),
+    )
+    return fondo_row, _saldo_fondo(db, fondo_row["id"])
 
 
 def _calcular_alertas(db) -> list[dict]:
@@ -204,10 +230,12 @@ def index():
 
         alertas = _calcular_alertas(db)
 
-        fondo_reserva = db.execute(
-            "SELECT id FROM fondos WHERE categoria_enlazada IS NULL AND activo=1 LIMIT 1"
-        ).fetchone()
-        fondo_reserva_id = fondo_reserva["id"] if fondo_reserva else None
+        fondos_activos = [
+            {"id": r["id"], "nombre": r["nombre"], "saldo": _saldo_fondo(db, r["id"])}
+            for r in db.execute(
+                "SELECT id, nombre FROM fondos WHERE activo=1 ORDER BY id"
+            ).fetchall()
+        ]
 
         catalogo_inventario = [
             {"id": r["id"], "nombre": r["nombre"]}
@@ -227,7 +255,7 @@ def index():
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         cat_filtro=cat_filtro,
-        fondo_reserva_id=fondo_reserva_id,
+        fondos=fondos_activos,
         catalogo_inventario=catalogo_inventario,
     )
 
@@ -242,7 +270,7 @@ def registrar():
     categoria       = (data.get("categoria") or "").strip()
     monto, err      = parse_monto(data.get("monto"), mayor_a_cero=True)
     descripcion     = (data.get("descripcion") or "").strip()
-    descontar_fondo = bool(data.get("descontar_fondo", False))
+    fondo_id        = data.get("fondo_id")   # opcional: si se elige, sale de ese fondo
     recibo_id       = data.get("recibo_id")
 
     if err:
@@ -260,32 +288,11 @@ def registrar():
         )
         nuevo_id = cur.lastrowid
 
-        fondo_row      = None
-        saldo_resultado = None
-
-        if categoria in _CATEGORIAS_CON_FONDO:
-            fondo_row = db.execute(
-                "SELECT id, nombre FROM fondos WHERE categoria_enlazada=? AND activo=1 LIMIT 1",
-                (categoria,),
-            ).fetchone()
-
-        elif categoria in _CATEGORIAS_PEDIR_RESERVA and descontar_fondo:
-            fondo_row = db.execute(
-                "SELECT id, nombre FROM fondos WHERE categoria_enlazada IS NULL AND activo=1 LIMIT 1"
-            ).fetchone()
-
-        if fondo_row:
-            db.execute(
-                "INSERT INTO movimientos_fondos "
-                "(fondo_id, fecha, tipo, monto, concepto, gasto_extra_id) "
-                "VALUES (?, ?, 'retiro', ?, ?, ?)",
-                (fondo_row["id"], fecha, monto, descripcion or categoria, nuevo_id),
-            )
-            db.execute(
-                "UPDATE gastos_extras SET fondo_descontado_id=? WHERE id=?",
-                (fondo_row["id"], nuevo_id),
-            )
-            saldo_resultado = _saldo_fondo(db, fondo_row["id"])
+        # Por defecto el gasto sale del dinero de la semana (ningún fondo).
+        # Solo se descuenta de un fondo si el usuario lo eligió explícitamente.
+        fondo_row, saldo_resultado = _descontar_de_fondo(
+            db, fondo_id, monto, fecha, descripcion or categoria, nuevo_id
+        )
 
         if recibo_id:
             recibo = db.execute(
@@ -333,7 +340,7 @@ def registrar_con_desglose():
     monto           = float(gasto.get("monto") or 0)
     descripcion     = (gasto.get("descripcion") or "").strip()
     recibo_id       = gasto.get("recibo_id")
-    descontar_fondo = bool(gasto.get("descontar_fondo", False))
+    fondo_id        = gasto.get("fondo_id")   # opcional
 
     if categoria not in CATEGORIAS:
         return jsonify({"error": "Categoría inválida"}), 400
@@ -350,31 +357,9 @@ def registrar_con_desglose():
         )
         nuevo_id = cur.lastrowid
 
-        fondo_row      = None
-        saldo_resultado = None
-
-        if categoria in _CATEGORIAS_CON_FONDO:
-            fondo_row = db.execute(
-                "SELECT id, nombre FROM fondos WHERE categoria_enlazada=? AND activo=1 LIMIT 1",
-                (categoria,),
-            ).fetchone()
-        elif categoria in _CATEGORIAS_PEDIR_RESERVA and descontar_fondo:
-            fondo_row = db.execute(
-                "SELECT id, nombre FROM fondos WHERE categoria_enlazada IS NULL AND activo=1 LIMIT 1"
-            ).fetchone()
-
-        if fondo_row:
-            db.execute(
-                "INSERT INTO movimientos_fondos "
-                "(fondo_id, fecha, tipo, monto, concepto, gasto_extra_id) "
-                "VALUES (?, ?, 'retiro', ?, ?, ?)",
-                (fondo_row["id"], fecha, monto, descripcion or categoria, nuevo_id),
-            )
-            db.execute(
-                "UPDATE gastos_extras SET fondo_descontado_id=? WHERE id=?",
-                (fondo_row["id"], nuevo_id),
-            )
-            saldo_resultado = _saldo_fondo(db, fondo_row["id"])
+        fondo_row, saldo_resultado = _descontar_de_fondo(
+            db, fondo_id, monto, fecha, descripcion or categoria, nuevo_id
+        )
 
         if recibo_id:
             recibo = db.execute(
