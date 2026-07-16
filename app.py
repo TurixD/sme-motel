@@ -156,6 +156,21 @@ def _dash_data(db_path: str) -> dict:
         ).fetchone()["t"])
         utilidad_sem = ing_sem - gas_sem
 
+        # --- Desglose efectivo / tarjeta / transferencia (día y semana) ---
+        # total_neto = efectivo + tarjeta + transferencia − comisión_tarjeta.
+        # La tarjeta y la transferencia caen en el banco; el efectivo es físico.
+        dsg_dia = conn.execute(
+            "SELECT COALESCE(SUM(monto_efectivo),0) efe, COALESCE(SUM(monto_tarjeta),0) tarj, "
+            "COALESCE(SUM(monto_transferencia),0) transf FROM ingresos_diarios WHERE fecha=?",
+            (op_hoy,),
+        ).fetchone()
+        dsg_sem = conn.execute(
+            "SELECT COALESCE(SUM(monto_efectivo),0) efe, COALESCE(SUM(monto_tarjeta),0) tarj, "
+            "COALESCE(SUM(monto_transferencia),0) transf, COALESCE(SUM(comision_tarjeta),0) comis "
+            "FROM ingresos_diarios WHERE fecha BETWEEN ? AND ?",
+            (lunes.isoformat(), hoy.isoformat()),
+        ).fetchone()
+
         # --- Fondo Reserva ---
         fondo_res = conn.execute(
             """SELECT f.nombre, f.meta_mensual,
@@ -292,6 +307,14 @@ def _dash_data(db_path: str) -> dict:
         "gas_sem":          gas_sem,
         "utilidad_sem":     utilidad_sem,
         "tu_parte":         utilidad_sem * 0.5,
+        "ing_efe_dia":      float(dsg_dia["efe"]),
+        "ing_tarj_dia":     float(dsg_dia["tarj"]),
+        "ing_transf_dia":   float(dsg_dia["transf"]),
+        "ing_efe_sem":      float(dsg_sem["efe"]),
+        "ing_tarj_sem":     float(dsg_sem["tarj"]),
+        "ing_transf_sem":   float(dsg_sem["transf"]),
+        "ing_comis_sem":    float(dsg_sem["comis"]),
+        "ing_banco_sem":    float(dsg_sem["tarj"]) + float(dsg_sem["transf"]),
         "reserva":          reserva,
         "aportes_pendientes": aportes_pendientes,
         "chart_dias":       chart_dias,

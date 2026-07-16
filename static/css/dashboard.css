@@ -145,6 +145,42 @@
 .semana-col__value--expense { color: var(--accent-expense); }
 .semana-col__value--fund    { color: var(--accent-fund); }
 
+/* --- Desglose efectivo vs banco --- */
+.ingreso-split {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+.ingreso-split__item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+}
+.ingreso-split__label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+}
+.ingreso-split__value {
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.ingreso-split__detail {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+}
+@media (max-width: 560px) {
+    .ingreso-split { grid-template-columns: 1fr; }
+}
+
 /* --- Barra de progreso del fondo --- */
 .progress {
     margin-top: var(--space-4);
