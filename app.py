@@ -609,6 +609,22 @@ def create_app() -> Flask:
     _ENDPOINTS_PUBLICOS = {"login", "static"}
 
     @app.before_request
+    def _forzar_https():
+        # Si entran por HTTP plano (ej. http://<IP-tailscale>:5050), rebota a la
+        # URL HTTPS con certificado válido. No toca localhost (kiosco) ni lo ya
+        # cifrado (detrás del proxy, X-Forwarded-Proto=https vía ProxyFix).
+        destino = Config.HTTPS_REDIRECT_HOST
+        if not destino or request.is_secure:
+            return
+        host = (request.host or "").split(":")[0]
+        if host in ("localhost", "127.0.0.1", "::1"):
+            return
+        url = f"https://{destino}{request.path}"
+        if request.query_string:
+            url += "?" + request.query_string.decode("latin-1")
+        return redirect(url, code=301)
+
+    @app.before_request
     def _requiere_login():
         if request.endpoint in _ENDPOINTS_PUBLICOS:
             return

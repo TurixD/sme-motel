@@ -29,6 +29,9 @@ class Config:
     # Activar SESSION_COOKIE_SECURE=true en .env cuando se sirva por HTTPS (remoto)
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
+    # Si se accede por HTTP plano (ej. la IP de Tailscale), rebota a esta URL HTTPS.
+    # Ej: desktop-01c8r6d.tail0eea51.ts.net  (vacío = sin redirección)
+    HTTPS_REDIRECT_HOST = os.getenv("SME_HTTPS_HOST", "").strip()
 
     # --- Claude / Anthropic ---
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
