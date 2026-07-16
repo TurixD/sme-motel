@@ -145,8 +145,10 @@ def _metodo_pago(data):
     if metodo:
         return (1 if metodo == "tarjeta" else 0,
                 1 if metodo == "transferencia" else 0)
-    return (1 if data.get("es_tarjeta") else 0,
-            1 if data.get("es_transferencia") else 0)
+    # Con flags: la tarjeta tiene prioridad; nunca ambos a la vez.
+    es_tarjeta = 1 if data.get("es_tarjeta") else 0
+    es_transf  = 0 if es_tarjeta else (1 if data.get("es_transferencia") else 0)
+    return (es_tarjeta, es_transf)
 
 
 @cuartos_bp.route("/cuartos/api/registrar", methods=["POST"])

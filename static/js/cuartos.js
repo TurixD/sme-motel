@@ -223,7 +223,8 @@
 
         document.getElementById('reg-precio').value = cuartoPrice(cuartoId, 6);
         document.getElementById('reg-notas').value  = '';
-        document.getElementById('reg-metodo').value = 'efectivo';
+        document.getElementById('reg-tarjeta').checked = false;
+        document.getElementById('reg-transferencia').checked = false;
         document.getElementById('reg-error').hidden = true;
         document.getElementById('modal-registro').hidden = false;
     }
@@ -252,10 +253,24 @@
 
     document.getElementById('btn-reg-confirmar').addEventListener('click', submitRegistrar);
 
+    /* Tarjeta y transferencia son mutuamente excluyentes (si no marcas nada = efectivo) */
+    function wireMetodoPago(tarjetaEl, transferEl) {
+        if (!tarjetaEl || !transferEl) return;
+        tarjetaEl.addEventListener('change', function () {
+            if (tarjetaEl.checked) transferEl.checked = false;
+        });
+        transferEl.addEventListener('change', function () {
+            if (transferEl.checked) tarjetaEl.checked = false;
+        });
+    }
+    wireMetodoPago(document.getElementById('reg-tarjeta'),
+                   document.getElementById('reg-transferencia'));
+
     async function submitRegistrar() {
         const precio = parseFloat(document.getElementById('reg-precio').value);
         const notas  = document.getElementById('reg-notas').value.trim();
-        const metodoPago = document.getElementById('reg-metodo').value;
+        const esTarjeta = document.getElementById('reg-tarjeta').checked;
+        const esTransferencia = document.getElementById('reg-transferencia').checked;
         const errEl  = document.getElementById('reg-error');
 
         if (isNaN(precio) || precio < 0) {
@@ -277,7 +292,8 @@
                     duracion_horas: currentDuracion,
                     precio_cobrado: precio,
                     notas:          notas || null,
-                    metodo_pago:    metodoPago,
+                    es_tarjeta:       esTarjeta,
+                    es_transferencia: esTransferencia,
                 }),
             });
             const data = await res.json();
@@ -456,12 +472,15 @@
                 <input class="form-input" type="number" id="edit-precio" min="0" step="1" value="${item.precio_cobrado}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="edit-metodo">Método de pago</label>
-                <select class="form-input" id="edit-metodo">
-                    <option value="efectivo" ${!item.es_tarjeta && !item.es_transferencia ? 'selected' : ''}>Efectivo (entra a caja)</option>
-                    <option value="tarjeta" ${item.es_tarjeta ? 'selected' : ''}>Tarjeta (banco, 4% comisión)</option>
-                    <option value="transferencia" ${item.es_transferencia ? 'selected' : ''}>Transferencia (banco, sin comisión)</option>
-                </select>
+                <span class="form-label">Pago <small>(efectivo por defecto)</small></span>
+                <label class="check-line">
+                    <input type="checkbox" id="edit-tarjeta" ${item.es_tarjeta ? 'checked' : ''}>
+                    <span>Tarjeta</span>
+                </label>
+                <label class="check-line">
+                    <input type="checkbox" id="edit-transferencia" ${item.es_transferencia ? 'checked' : ''}>
+                    <span>Transferencia</span>
+                </label>
             </div>
             <div class="form-group">
                 <label class="form-label" for="edit-notas">Notas</label>
@@ -486,6 +505,9 @@
                 });
             });
         }
+
+        wireMetodoPago(document.getElementById('edit-tarjeta'),
+                       document.getElementById('edit-transferencia'));
 
         document.getElementById('btn-edit-volver').addEventListener('click', function () {
             renderDetalleDefault(item);
@@ -513,7 +535,8 @@
                         duracion_horas: editDur,
                         precio_cobrado: precio,
                         notas:          notas || null,
-                        metodo_pago:    document.getElementById('edit-metodo').value,
+                        es_tarjeta:       document.getElementById('edit-tarjeta').checked,
+                        es_transferencia: document.getElementById('edit-transferencia').checked,
                     }),
                 });
                 const data = await res.json();
