@@ -341,7 +341,7 @@ _WMO = {
 }
 
 _CLIMA_FALLBACK: dict = {
-    "valor": "Aguascalientes", "temp": None, "code": None,
+    "valor": "Calvillo, Ags.", "temp": None, "code": None,
     "desc": "", "categoria": "nublado", "forecast": [],
 }
 
@@ -361,7 +361,7 @@ def _obtener_clima() -> dict:
     """Consulta Open-Meteo con forecast horario. Cachea 15 min. Falla silencioso."""
     global _CLIMA_CACHE
     ahora = time.time()
-    if ahora - _CLIMA_CACHE["ts"] < 900 and _CLIMA_CACHE["data"]:
+    if ahora - _CLIMA_CACHE["ts"] < 600 and _CLIMA_CACHE["data"]:
         return _CLIMA_CACHE["data"]
 
     url = (
@@ -404,7 +404,7 @@ def _obtener_clima() -> dict:
                 })
 
         resultado = {
-            "valor":     f"{temp}°C, {desc} — Aguascalientes",
+            "valor":     f"{temp}°C, {desc} — Calvillo",
             "temp":      temp,
             "code":      code,
             "desc":      desc,
@@ -416,7 +416,7 @@ def _obtener_clima() -> dict:
         return resultado
 
     except Exception:
-        _CLIMA_CACHE["ts"] = ahora - 840  # reintenta en ~60s
+        _CLIMA_CACHE["ts"] = ahora - 540  # cache 10 min: reintenta en ~60s
         return _CLIMA_CACHE.get("data") or _CLIMA_FALLBACK
 
 
@@ -549,6 +549,12 @@ def create_app() -> Flask:
         data = _dash_data(Config.DB_PATH)
         log_action("Visita al dashboard (/)")
         return render_template("dashboard.html", **data)
+
+    @app.route("/api/clima")
+    def api_clima():
+        # Devuelve solo el HTML del widget del clima (clima_data lo inyecta el
+        # context processor). Lo consume el auto-refresco del dashboard.
+        return render_template("_clima_widget.html")
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
