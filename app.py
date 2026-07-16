@@ -124,7 +124,6 @@ def _dash_data(db_path: str) -> dict:
     lunes    = _lunes_semana(hoy)
     domingo  = lunes + timedelta(days=6)
     hace7    = hoy - timedelta(days=6)
-    lim15    = hoy + timedelta(days=15)
 
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -267,7 +266,16 @@ def _dash_data(db_path: str) -> dict:
             {"key": "noche",  "label": "Noche"},
         ]
 
-        # --- Recordatorios gastos fijos (próximos 15 días) ---
+        # --- Recordatorios gastos fijos (ventana configurable) ---
+        row_dias = conn.execute(
+            "SELECT valor FROM configuracion WHERE clave='dias_anticipacion_pendientes'"
+        ).fetchone()
+        try:
+            dias_anticip = int(row_dias["valor"]) if row_dias and row_dias["valor"] else 15
+        except (TypeError, ValueError):
+            dias_anticip = 15
+        lim15 = hoy + timedelta(days=dias_anticip)
+
         gf_rows = conn.execute(
             "SELECT id, concepto, monto_estimado, frecuencia, dia_recordatorio, fecha_fin "
             "FROM gastos_fijos WHERE activo=1 AND dia_recordatorio IS NOT NULL"

@@ -261,6 +261,22 @@
                     </div>
                 </div>
 
+                <div class="config-row">
+                    <div class="config-row__info">
+                        <label class="config-row__label" for="input-dias_anticipacion_pendientes">Anticipación de pendientes</label>
+                        <span class="config-row__hint">Con cuántos días de anticipación aparece un pendiente en el dashboard</span>
+                    </div>
+                    <div class="config-row__control">
+                        <div class="input-suffix" style="width:110px">
+                            <input class="field-input field-input--sm mono" type="number"
+                                   id="input-dias_anticipacion_pendientes" min="1" max="90" step="1"
+                                   value="{{ config.get('dias_anticipacion_pendientes', '15') }}">
+                            <span class="suffix-symbol">días</span>
+                        </div>
+                        <button class="btn btn--config btn--sm" id="btn-save-dias_anticipacion_pendientes">Guardar</button>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -455,6 +471,7 @@
         'umbral_alerta_gasto_ia_usd',
         'memoria_asistente_mensajes',
         'timeout_sesion_minutos',
+        'dias_anticipacion_pendientes',
     ];
     configClaves.forEach(function (clave) {
         var btn   = document.getElementById('btn-save-' + clave);

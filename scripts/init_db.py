@@ -175,6 +175,18 @@ def migrar() -> None:
             migraciones += 1
             print("  gastos_fijos: columna 'fecha_fin' agregada")
 
+        # configuracion: ventana de anticipación de pendientes (default 15 días)
+        if not conn.execute(
+            "SELECT 1 FROM configuracion WHERE clave='dias_anticipacion_pendientes'"
+        ).fetchone():
+            conn.execute(
+                "INSERT INTO configuracion (clave, valor, descripcion) VALUES (?,?,?)",
+                ("dias_anticipacion_pendientes", "15",
+                 "Días de anticipación con que un pendiente aparece en el dashboard"),
+            )
+            migraciones += 1
+            print("  configuracion: clave 'dias_anticipacion_pendientes' agregada (15)")
+
         # recibos: hash_md5
         columnas_recibos = {row[1] for row in conn.execute("PRAGMA table_info(recibos)").fetchall()}
         if "hash_md5" not in columnas_recibos:

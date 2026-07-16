@@ -32,6 +32,7 @@ _CONFIG_RULES: dict[str, tuple] = {
     "limite_mensual_ia_usd":      ("decimal",   0.01, None),
     "memoria_asistente_mensajes": ("int_range", 1,    50),
     "timeout_sesion_minutos":     ("int",       1,    None),
+    "dias_anticipacion_pendientes": ("int_range", 1,  90),
 }
 
 _TURNOS_LABEL = {"manana": "Mañana", "tarde": "Tarde", "noche": "Noche"}
