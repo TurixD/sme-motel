@@ -228,7 +228,15 @@
                     <span class="reminder__monto">{{ r.monto_estimado | moneda }}</span>
                     <span class="reminder__dias {{ 'reminder__dias--urgente' if r.dias_faltantes == 0 }}">{{ r.texto_dias }}</span>
                 </div>
-                <button class="btn" data-action="marcar-pagada" data-gasto-fijo-id="{{ r.id }}">Marcar pagada</button>
+                <div class="reminder__actions">
+                    <select class="reminder__fondo" id="reminder-fondo-{{ r.id }}" title="¿De dónde se paga?">
+                        <option value="">Dinero de la semana</option>
+                        {% for f in fondos %}
+                        <option value="{{ f.id }}">Fondo: {{ f.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn" data-action="marcar-pagada" data-gasto-fijo-id="{{ r.id }}">Marcar pagada</button>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -244,12 +252,16 @@ document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-action="marcar-pagada"]');
     if (!btn) return;
     var id = btn.dataset.gastoFijoId;
+    var sel = document.getElementById('reminder-fondo-' + id);
+    var fondoId = sel && sel.value ? parseInt(sel.value) : null;
     btn.disabled = true;
     btn.textContent = 'Guardando...';
     fetch('/dashboard/api/marcar-pagada', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gasto_fijo_id: parseInt(id) })
+        body: JSON.stringify(fondoId
+            ? { gasto_fijo_id: parseInt(id), fondo_id: fondoId }
+            : { gasto_fijo_id: parseInt(id) })
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {

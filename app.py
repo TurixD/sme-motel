@@ -23,7 +23,7 @@ from modules.cortes import cortes_bp
 from modules.cuartos import cuartos_bp
 from modules.empleados import empleados_bp
 from modules.fondos import fondos_bp
-from modules.gastos import gastos_bp
+from modules.gastos import _descontar_de_fondo, gastos_bp
 from modules.inventario import inventario_bp
 from modules.ingresos import ingresos_bp
 from modules.reportes import reportes_bp
@@ -207,6 +207,14 @@ def _dash_data(db_path: str) -> dict:
         ).fetchall()
         aportes_pendientes = [dict(r) for r in ap_rows]
 
+        # Fondos activos (para el selector "pagar desde" en los recordatorios)
+        fondos_dash = [
+            {"id": r["id"], "nombre": r["nombre"]}
+            for r in conn.execute(
+                "SELECT id, nombre FROM fondos WHERE activo=1 ORDER BY id"
+            ).fetchall()
+        ]
+
         # --- Gráfica últimos 7 días ---
         raw_chart = {
             r["fecha"]: float(r["t"])
@@ -317,6 +325,7 @@ def _dash_data(db_path: str) -> dict:
         "ing_banco_sem":    float(dsg_sem["tarj"]) + float(dsg_sem["transf"]),
         "reserva":          reserva,
         "aportes_pendientes": aportes_pendientes,
+        "fondos":           fondos_dash,
         "chart_dias":       chart_dias,
         "dias_info":        dias_info,
         "turno_matrix":     turno_matrix,
@@ -664,14 +673,22 @@ def create_app() -> Flask:
                 "INSERT INTO gastos_extras (fecha, categoria, monto, descripcion) VALUES (?,?,?,?)",
                 (hoy, categoria, monto, descripcion),
             )
-            conn.commit()
             gasto_id = cur.lastrowid
 
+            # Fondo opcional: si el usuario eligió pagarlo desde un fondo, se
+            # descuenta de ahí; si no, sale del dinero de la semana (baja utilidad).
+            fondo_row, _saldo = _descontar_de_fondo(
+                conn, data.get("fondo_id"), monto, hoy, descripcion, gasto_id
+            )
+            conn.commit()
+            nombre_fondo = fondo_row["nombre"] if fondo_row else None
+
         log_action(
-            "Gasto fijo '%s' marcado pagado → gastos_extras id=%d ($%.2f)",
+            "Gasto fijo '%s' marcado pagado → gastos_extras id=%d ($%.2f)%s",
             concepto, gasto_id, monto,
+            f" desde fondo '{nombre_fondo}'" if nombre_fondo else " (dinero de la semana)",
         )
-        return jsonify({"ok": True, "gasto_id": gasto_id})
+        return jsonify({"ok": True, "gasto_id": gasto_id, "nombre_fondo": nombre_fondo})
 
     return app
 
