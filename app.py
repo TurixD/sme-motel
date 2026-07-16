@@ -341,7 +341,7 @@ _WMO = {
 }
 
 _CLIMA_FALLBACK: dict = {
-    "valor": "Calvillo, Ags.", "temp": None, "code": None,
+    "valor": "Aguascalientes", "temp": None, "code": None,
     "desc": "", "categoria": "nublado", "forecast": [],
 }
 
@@ -366,7 +366,7 @@ def _obtener_clima() -> dict:
 
     url = (
         "https://api.open-meteo.com/v1/forecast"
-        "?latitude=21.8459&longitude=-102.7188"
+        "?latitude=21.880775&longitude=-102.632289"
         "&current=temperature_2m,weather_code,is_day"
         "&hourly=temperature_2m,weather_code,is_day"
         "&forecast_days=2"
