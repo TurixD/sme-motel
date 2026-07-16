@@ -269,7 +269,7 @@ def _dash_data(db_path: str) -> dict:
 
         # --- Recordatorios gastos fijos (próximos 15 días) ---
         gf_rows = conn.execute(
-            "SELECT id, concepto, monto_estimado, frecuencia, dia_recordatorio "
+            "SELECT id, concepto, monto_estimado, frecuencia, dia_recordatorio, fecha_fin "
             "FROM gastos_fijos WHERE activo=1 AND dia_recordatorio IS NOT NULL"
         ).fetchall()
         recordatorios = []
@@ -283,6 +283,9 @@ def _dash_data(db_path: str) -> dict:
                 gf["dia_recordatorio"], ultimo_row["f"] if ultimo_row else None
             )
             if proxima is None or proxima > lim15:
+                continue
+            # Vigencia: si ya pasó fecha_fin, el pendiente terminó (no recordar)
+            if gf["fecha_fin"] and proxima > date.fromisoformat(gf["fecha_fin"]):
                 continue
             dias_f = (proxima - hoy).days
             recordatorios.append({
@@ -699,6 +702,63 @@ def create_app() -> Flask:
             f" desde fondo '{nombre_fondo}'" if nombre_fondo else " (dinero de la semana)",
         )
         return jsonify({"ok": True, "gasto_id": gasto_id, "nombre_fondo": nombre_fondo})
+
+    @app.route("/dashboard/api/pendiente", methods=["POST"])
+    @solo_admin
+    def crear_pendiente():
+        data     = request.get_json(silent=True) or {}
+        concepto = (data.get("concepto") or "").strip()
+        if not concepto:
+            return jsonify({"ok": False, "error": "Ponle un nombre al pendiente"}), 400
+        try:
+            monto = max(0.0, float(data.get("monto") or 0))
+        except (TypeError, ValueError):
+            monto = 0.0
+        frecuencia = (data.get("frecuencia") or "mensual").strip().lower()
+        if frecuencia not in ("mensual", "bimestral"):
+            frecuencia = "mensual"
+        try:
+            dia = int(data.get("dia_recordatorio"))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Día de pago inválido"}), 400
+        if not (1 <= dia <= 31):
+            return jsonify({"ok": False, "error": "El día de pago debe ser entre 1 y 31"}), 400
+
+        # Vigencia → fecha_fin (indefinido = NULL)
+        tipo  = (data.get("vigencia_tipo") or "indefinido").strip().lower()
+        fecha_fin = None
+        if tipo in ("meses", "anos", "años"):
+            try:
+                valor = int(data.get("vigencia_valor") or 0)
+            except (TypeError, ValueError):
+                valor = 0
+            if valor > 0:
+                meses = valor * 12 if tipo in ("anos", "años") else valor
+                fecha_fin = _add_months(date.today(), meses).isoformat()
+
+        with sqlite3.connect(Config.DB_PATH) as conn:
+            conn.execute(
+                "INSERT INTO gastos_fijos "
+                "(concepto, monto_estimado, frecuencia, dia_recordatorio, fecha_fin, activo) "
+                "VALUES (?,?,?,?,?,1)",
+                (concepto, monto, frecuencia, dia, fecha_fin),
+            )
+            conn.commit()
+        log_action("Pendiente creado: '%s' $%.2f %s dia=%d fin=%s",
+                   concepto, monto, frecuencia, dia, fecha_fin or "indefinido")
+        return jsonify({"ok": True})
+
+    @app.route("/dashboard/api/pendiente/<int:gf_id>/eliminar", methods=["POST"])
+    @solo_admin
+    def eliminar_pendiente(gf_id):
+        with sqlite3.connect(Config.DB_PATH) as conn:
+            row = conn.execute("SELECT concepto FROM gastos_fijos WHERE id=?", (gf_id,)).fetchone()
+            if not row:
+                return jsonify({"ok": False, "error": "Pendiente no encontrado"}), 404
+            conn.execute("DELETE FROM gastos_fijos WHERE id=?", (gf_id,))
+            conn.commit()
+        log_action("Pendiente eliminado: id=%d '%s'", gf_id, row[0])
+        return jsonify({"ok": True})
 
     return app
 

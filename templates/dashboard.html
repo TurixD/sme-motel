@@ -217,7 +217,13 @@
 
     {# ── Pendientes — recordatorios reales ──────────────────── #}
     <section class="card">
-        <div class="section-title">Pendientes</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-3)">
+            <div class="section-title" style="margin:0">Pendientes</div>
+            <button class="btn btn--ghost btn--sm" id="btn-nuevo-pendiente">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Nuevo pendiente
+            </button>
+        </div>
         {% if recordatorios %}
         <div class="reminders" id="reminders-list">
             {% for r in recordatorios %}
@@ -237,6 +243,10 @@
                         <option value="nada">No descontar de ningún lado</option>
                     </select>
                     <button class="btn" data-action="marcar-pagada" data-gasto-fijo-id="{{ r.id }}">Marcar pagada</button>
+                    <button class="btn-icon btn-icon--danger" data-action="eliminar-pendiente"
+                            data-gasto-fijo-id="{{ r.id }}" data-concepto="{{ r.concepto }}" title="Eliminar pendiente">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    </button>
                 </div>
             </div>
             {% endfor %}
@@ -246,6 +256,55 @@
         {% endif %}
     </section>
 
+</div>
+
+{# ── Modal: nuevo pendiente ─────────────────────────────────── #}
+<div class="modal" id="modal-pendiente" hidden>
+    <div class="modal__backdrop" id="pendiente-backdrop"></div>
+    <div class="modal__box">
+        <h2 class="modal__title">Nuevo pendiente</h2>
+        <div class="field-group">
+            <label class="field-label" for="pend-nombre">Nombre</label>
+            <input class="field-input" type="text" id="pend-nombre" placeholder="Ej. StarTV, Predial, Préstamo…">
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="pend-monto">Cantidad</label>
+            <div class="input-prefix" style="max-width:200px">
+                <span class="prefix-symbol">$</span>
+                <input class="field-input mono" type="number" id="pend-monto" min="0" step="any" placeholder="0">
+            </div>
+        </div>
+        <div class="form-row-2">
+            <div class="field-group">
+                <label class="field-label" for="pend-frecuencia">Frecuencia</label>
+                <select class="field-input" id="pend-frecuencia">
+                    <option value="mensual">Mensual</option>
+                    <option value="bimestral">Bimestral</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="pend-dia">Día de pago</label>
+                <input class="field-input mono" type="number" id="pend-dia" min="1" max="31" placeholder="Ej. 24">
+            </div>
+        </div>
+        <div class="field-group">
+            <label class="field-label" for="pend-vigencia">Vigencia</label>
+            <div style="display:flex;gap:var(--space-2)">
+                <select class="field-input" id="pend-vigencia" style="flex:1">
+                    <option value="indefinido">Indefinido</option>
+                    <option value="meses">Por meses</option>
+                    <option value="anos">Por años</option>
+                </select>
+                <input class="field-input mono" type="number" id="pend-vig-valor" min="1" placeholder="#"
+                       style="width:80px;display:none">
+            </div>
+        </div>
+        <p class="form-error" id="pend-error" hidden></p>
+        <div class="modal__actions">
+            <button class="btn btn--primary" id="btn-guardar-pendiente">Guardar</button>
+            <button class="btn btn--ghost" id="btn-cancelar-pendiente">Cancelar</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -287,6 +346,83 @@ document.addEventListener('click', function (e) {
         btn.textContent = 'Marcar pagada';
     });
 });
+
+/* ── Eliminar pendiente ── */
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-action="eliminar-pendiente"]');
+    if (!btn) return;
+    var id = btn.dataset.gastoFijoId;
+    var nombre = btn.dataset.concepto || 'este pendiente';
+    if (!confirm('¿Eliminar el pendiente "' + nombre + '"?')) return;
+    fetch('/dashboard/api/pendiente/' + id + '/eliminar', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+        if (data.ok) { location.reload(); }
+        else { alert(data.error || 'No se pudo eliminar'); }
+    })
+    .catch(function () { alert('Error de conexión'); });
+});
+
+/* ── Nuevo pendiente ── */
+(function () {
+    var modal = document.getElementById('modal-pendiente');
+    function abrir() {
+        document.getElementById('pend-nombre').value = '';
+        document.getElementById('pend-monto').value  = '';
+        document.getElementById('pend-frecuencia').value = 'mensual';
+        document.getElementById('pend-dia').value    = '';
+        document.getElementById('pend-vigencia').value = 'indefinido';
+        document.getElementById('pend-vig-valor').style.display = 'none';
+        document.getElementById('pend-vig-valor').value = '';
+        document.getElementById('pend-error').hidden = true;
+        modal.hidden = false;
+        setTimeout(function () { document.getElementById('pend-nombre').focus(); }, 50);
+    }
+    function cerrar() { modal.hidden = true; }
+
+    document.getElementById('btn-nuevo-pendiente').addEventListener('click', abrir);
+    document.getElementById('btn-cancelar-pendiente').addEventListener('click', cerrar);
+    document.getElementById('pendiente-backdrop').addEventListener('click', cerrar);
+
+    // Mostrar el número solo si la vigencia es por meses/años
+    document.getElementById('pend-vigencia').addEventListener('change', function () {
+        document.getElementById('pend-vig-valor').style.display =
+            (this.value === 'indefinido') ? 'none' : 'block';
+    });
+
+    document.getElementById('btn-guardar-pendiente').addEventListener('click', function () {
+        var errEl = document.getElementById('pend-error');
+        var nombre = document.getElementById('pend-nombre').value.trim();
+        var dia    = parseInt(document.getElementById('pend-dia').value);
+        if (!nombre)               { errEl.textContent = 'Ponle un nombre.'; errEl.hidden = false; return; }
+        if (!(dia >= 1 && dia <= 31)) { errEl.textContent = 'El día de pago debe ser entre 1 y 31.'; errEl.hidden = false; return; }
+        errEl.hidden = true;
+
+        var tipo = document.getElementById('pend-vigencia').value;
+        var payload = {
+            concepto:         nombre,
+            monto:            parseFloat(document.getElementById('pend-monto').value) || 0,
+            frecuencia:       document.getElementById('pend-frecuencia').value,
+            dia_recordatorio: dia,
+            vigencia_tipo:    tipo,
+        };
+        if (tipo !== 'indefinido') payload.vigencia_valor = parseInt(document.getElementById('pend-vig-valor').value) || 0;
+
+        var btn = this; btn.disabled = true;
+        fetch('/dashboard/api/pendiente', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            btn.disabled = false;
+            if (data.ok) { location.reload(); }
+            else { errEl.textContent = data.error || 'No se pudo guardar'; errEl.hidden = false; }
+        })
+        .catch(function () { btn.disabled = false; errEl.textContent = 'Error de conexión'; errEl.hidden = false; });
+    });
+}());
 
 /* ── Auto-refresco del clima cada 10 min (sin recargar la página) ── */
 (function () {

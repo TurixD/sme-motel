@@ -168,6 +168,13 @@ def migrar() -> None:
             migraciones += 1
             print("  gastos_extras: columna 'afecta_utilidad' agregada")
 
+        # gastos_fijos: fecha_fin (vigencia del pendiente; NULL = indefinido)
+        cols_gf = {row[1] for row in conn.execute("PRAGMA table_info(gastos_fijos)").fetchall()}
+        if "fecha_fin" not in cols_gf:
+            conn.execute("ALTER TABLE gastos_fijos ADD COLUMN fecha_fin TEXT")
+            migraciones += 1
+            print("  gastos_fijos: columna 'fecha_fin' agregada")
+
         # recibos: hash_md5
         columnas_recibos = {row[1] for row in conn.execute("PRAGMA table_info(recibos)").fetchall()}
         if "hash_md5" not in columnas_recibos:
