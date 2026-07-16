@@ -114,6 +114,8 @@
             : '';
         const tarjetaBadge = item.es_tarjeta
             ? '<span class="feed-item__tarjeta" title="Pago con tarjeta">💳</span>'
+            : item.es_transferencia
+            ? '<span class="feed-item__tarjeta" title="Pago por transferencia">🏦</span>'
             : '';
         const cancelBadge = cancelado
             ? '<span class="feed-item__badge-cancelado">Cancelado</span>'
@@ -221,7 +223,7 @@
 
         document.getElementById('reg-precio').value = cuartoPrice(cuartoId, 6);
         document.getElementById('reg-notas').value  = '';
-        document.getElementById('reg-tarjeta').checked = false;
+        document.getElementById('reg-metodo').value = 'efectivo';
         document.getElementById('reg-error').hidden = true;
         document.getElementById('modal-registro').hidden = false;
     }
@@ -253,7 +255,7 @@
     async function submitRegistrar() {
         const precio = parseFloat(document.getElementById('reg-precio').value);
         const notas  = document.getElementById('reg-notas').value.trim();
-        const esTarjeta = document.getElementById('reg-tarjeta').checked;
+        const metodoPago = document.getElementById('reg-metodo').value;
         const errEl  = document.getElementById('reg-error');
 
         if (isNaN(precio) || precio < 0) {
@@ -275,7 +277,7 @@
                     duracion_horas: currentDuracion,
                     precio_cobrado: precio,
                     notas:          notas || null,
-                    es_tarjeta:     esTarjeta,
+                    metodo_pago:    metodoPago,
                 }),
             });
             const data = await res.json();
@@ -356,7 +358,7 @@
                 <div class="detalle-row"><span>Hora</span><span>${item.hora_registro.substring(0, 5)}</span></div>
                 <div class="detalle-row"><span>Duración</span><span>${item.duracion_horas}h</span></div>
                 <div class="detalle-row"><span>Precio</span><span>${formatPeso(item.precio_cobrado)}${editBadge}</span></div>
-                <div class="detalle-row"><span>Pago</span><span>${item.es_tarjeta ? '💳 Tarjeta' : 'Efectivo'}</span></div>
+                <div class="detalle-row"><span>Pago</span><span>${item.es_tarjeta ? '💳 Tarjeta' : item.es_transferencia ? '🏦 Transferencia' : 'Efectivo'}</span></div>
                 <div class="detalle-row"><span>Registrado por</span><span>${displayModo(item.registrado_por)}</span></div>
                 ${notasRow}
                 ${editadoPorRow}
@@ -454,10 +456,12 @@
                 <input class="form-input" type="number" id="edit-precio" min="0" step="1" value="${item.precio_cobrado}">
             </div>
             <div class="form-group">
-                <label class="check-line">
-                    <input type="checkbox" id="edit-tarjeta" ${item.es_tarjeta ? 'checked' : ''}>
-                    <span>Pago con tarjeta <small>(no entra a caja)</small></span>
-                </label>
+                <label class="form-label" for="edit-metodo">Método de pago</label>
+                <select class="form-input" id="edit-metodo">
+                    <option value="efectivo" ${!item.es_tarjeta && !item.es_transferencia ? 'selected' : ''}>Efectivo (entra a caja)</option>
+                    <option value="tarjeta" ${item.es_tarjeta ? 'selected' : ''}>Tarjeta (banco, 4% comisión)</option>
+                    <option value="transferencia" ${item.es_transferencia ? 'selected' : ''}>Transferencia (banco, sin comisión)</option>
+                </select>
             </div>
             <div class="form-group">
                 <label class="form-label" for="edit-notas">Notas</label>
@@ -509,7 +513,7 @@
                         duracion_horas: editDur,
                         precio_cobrado: precio,
                         notas:          notas || null,
-                        es_tarjeta:     document.getElementById('edit-tarjeta').checked,
+                        metodo_pago:    document.getElementById('edit-metodo').value,
                     }),
                 });
                 const data = await res.json();

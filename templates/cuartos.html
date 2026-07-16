@@ -155,10 +155,12 @@
         </div>
 
         <div class="form-group">
-            <label class="check-line">
-                <input type="checkbox" id="reg-tarjeta">
-                <span>Pago con tarjeta <small>(no entra a caja)</small></span>
-            </label>
+            <label class="form-label" for="reg-metodo">Método de pago</label>
+            <select class="form-input" id="reg-metodo">
+                <option value="efectivo">Efectivo (entra a caja)</option>
+                <option value="tarjeta">Tarjeta (banco, 4% comisión)</option>
+                <option value="transferencia">Transferencia (banco, sin comisión)</option>
+            </select>
         </div>
 
         <div class="form-group">

@@ -356,6 +356,10 @@ def migrar() -> None:
                 conn.execute("ALTER TABLE rentas ADD COLUMN es_tarjeta INTEGER NOT NULL DEFAULT 0")
                 migraciones += 1
                 print("  rentas: columna 'es_tarjeta' agregada (v2.5)")
+            if "es_transferencia" not in cols_rentas:
+                conn.execute("ALTER TABLE rentas ADD COLUMN es_transferencia INTEGER NOT NULL DEFAULT 0")
+                migraciones += 1
+                print("  rentas: columna 'es_transferencia' agregada (transferencia sin comisión)")
 
         # v2.1 — tabla cuartos (catálogo estático)
         tablas = {r[0] for r in conn.execute(

@@ -115,7 +115,7 @@ ingresos_diarios(id, fecha TEXT YYYY-MM-DD, monto_efectivo, monto_tarjeta, monto
 cortes_turno(id, fecha, turno [manana|tarde|noche], empleado_id FK, bruto_calculado, bruto_declarado, estado [declarado|editado|anulado], declarado_por_nombre, notas)
   * Corte del efectivo esperado en caja por turno. mañana = cuartos efectivo − sueldos mañana; tarde = (mañana+tarde efectivo) − sueldos mañana+tarde+noche (acumulativo); noche = cuartos efectivo. Solo estados 'declarado'/'editado' cuentan.
 
-rentas(id, cuarto_id FK, fecha, hora_registro, duracion_horas, precio_default, precio_cobrado, notas, estado [activo|cancelado], registrado_por, editado INTEGER 0/1, es_tarjeta INTEGER 0/1 [pago con tarjeta, no entra a caja])
+rentas(id, cuarto_id FK, fecha, hora_registro, duracion_horas, precio_default, precio_cobrado, notas, estado [activo|cancelado], registrado_por, editado INTEGER 0/1, es_tarjeta INTEGER 0/1 [tarjeta: banco, 4% comisión, no entra a caja], es_transferencia INTEGER 0/1 [transferencia: banco, SIN comisión, no entra a caja]; si ambos 0 = efectivo, entra a caja)
 cuartos(id, numero, tipo, nombre_display, precio_6h, precio_12h, precio_18h, precio_24h)
 
 gastos_extras(id, fecha, categoria TEXT [Gas|Luz|Agua-Pipas|Agua-Embotellada|Mantenimiento|Sam's|StarTV|Renta|Otro], monto, descripcion, recibo_id, fondo_descontado_id, creado_en)

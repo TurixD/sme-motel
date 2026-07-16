@@ -64,7 +64,7 @@ def _actividad_dia(conn, es_admin: bool) -> list[dict]:
         SELECT r.id, r.cuarto_id, r.fecha, r.hora_registro, r.duracion_horas,
                r.precio_default, r.precio_cobrado, r.notas, r.estado,
                r.registrado_por, r.cancelado_por, r.cancelado_at,
-               r.motivo_cancelacion, r.editado, r.editado_por, r.es_tarjeta,
+               r.motivo_cancelacion, r.editado, r.editado_por, r.es_tarjeta, r.es_transferencia,
                c.nombre_display, c.tipo
         FROM rentas r
         JOIN cuartos c ON c.id = r.cuarto_id
@@ -83,6 +83,7 @@ def _actividad_dia(conn, es_admin: bool) -> list[dict]:
         item = dict(r)
         item["editado"] = bool(item["editado"])
         item["es_tarjeta"] = bool(item["es_tarjeta"])
+        item["es_transferencia"] = bool(item["es_transferencia"])
         result.append(item)
     return result
 
@@ -137,6 +138,17 @@ def api_actividad_dia():
 
 # ── API: registrar renta ─────────────────────────────────────
 
+def _metodo_pago(data):
+    """(es_tarjeta, es_transferencia) mutuamente excluyentes desde 'metodo_pago'
+    ('efectivo'|'tarjeta'|'transferencia'); compat con flags viejos."""
+    metodo = (data.get("metodo_pago") or "").strip().lower()
+    if metodo:
+        return (1 if metodo == "tarjeta" else 0,
+                1 if metodo == "transferencia" else 0)
+    return (1 if data.get("es_tarjeta") else 0,
+            1 if data.get("es_transferencia") else 0)
+
+
 @cuartos_bp.route("/cuartos/api/registrar", methods=["POST"])
 def api_registrar():
     data = request.get_json(silent=True) or {}
@@ -144,7 +156,7 @@ def api_registrar():
     duracion      = data.get("duracion_horas")
     precio_cobrado = data.get("precio_cobrado")
     notas         = (data.get("notas") or "").strip() or None
-    es_tarjeta    = 1 if data.get("es_tarjeta") else 0
+    es_tarjeta, es_transferencia = _metodo_pago(data)
 
     if not isinstance(cuarto_id, int) or duracion not in _DURACIONES_VALIDAS:
         return jsonify({"ok": False, "error": "Datos inválidos"}), 400
@@ -168,8 +180,9 @@ def api_registrar():
         cur = conn.execute(
             """INSERT INTO rentas
                (cuarto_id, fecha, hora_registro, duracion_horas,
-                precio_default, precio_cobrado, notas, registrado_por, editado, es_tarjeta)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                precio_default, precio_cobrado, notas, registrado_por, editado,
+                es_tarjeta, es_transferencia)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (cuarto_id,
              ahora.strftime("%Y-%m-%d"),
              ahora.strftime("%H:%M:%S"),
@@ -179,7 +192,8 @@ def api_registrar():
              notas,
              modo,
              editado,
-             es_tarjeta),
+             es_tarjeta,
+             es_transferencia),
         )
         conn.commit()
         renta_id = cur.lastrowid
@@ -234,7 +248,7 @@ def api_editar(renta_id: int):
     duracion       = data.get("duracion_horas")
     precio_cobrado = data.get("precio_cobrado")
     notas          = (data.get("notas") or "").strip() or None
-    es_tarjeta     = 1 if data.get("es_tarjeta") else 0
+    es_tarjeta, es_transferencia = _metodo_pago(data)
     modo           = _modo_actual()
     es_admin       = modo.startswith("admin_")
 
@@ -261,8 +275,8 @@ def api_editar(renta_id: int):
         editado    = 1 if abs(precio_cobrado - precio_def) > 0.001 else 0
 
         conn.execute(
-            "UPDATE rentas SET duracion_horas=?, precio_cobrado=?, notas=?, editado=?, editado_por=?, es_tarjeta=? WHERE id=?",
-            (duracion, precio_cobrado, notas, editado, modo, es_tarjeta, renta_id),
+            "UPDATE rentas SET duracion_horas=?, precio_cobrado=?, notas=?, editado=?, editado_por=?, es_tarjeta=?, es_transferencia=? WHERE id=?",
+            (duracion, precio_cobrado, notas, editado, modo, es_tarjeta, es_transferencia, renta_id),
         )
         conn.commit()
 

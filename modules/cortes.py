@@ -135,6 +135,7 @@ def _calcular_bruto(conn, turno: str, fecha: str) -> dict:
     row = conn.execute(
         """SELECT COALESCE(SUM(precio_cobrado), 0) AS bruto,
                   COALESCE(SUM(CASE WHEN es_tarjeta = 1 THEN precio_cobrado ELSE 0 END), 0) AS tarjeta,
+                  COALESCE(SUM(CASE WHEN es_transferencia = 1 THEN precio_cobrado ELSE 0 END), 0) AS transferencia,
                   COUNT(*) AS cnt
            FROM rentas
            WHERE (fecha || ' ' || hora_registro) >= ?
@@ -142,13 +143,15 @@ def _calcular_bruto(conn, turno: str, fecha: str) -> dict:
              AND estado = 'activo'""",
         (lo, hi),
     ).fetchone()
-    bruto   = float(row["bruto"])
-    tarjeta = float(row["tarjeta"])
+    bruto         = float(row["bruto"])
+    tarjeta       = float(row["tarjeta"])
+    transferencia = float(row["transferencia"])
     return {
-        "bruto":          bruto,             # total cuartos (efectivo + tarjeta)
-        "bruto_tarjeta":  tarjeta,           # porción pagada con tarjeta
-        "bruto_efectivo": bruto - tarjeta,   # porción en efectivo (lo que entra a caja)
-        "count_rentas":   int(row["cnt"]),
+        "bruto":              bruto,          # total cuartos (efectivo + tarjeta + transferencia)
+        "bruto_tarjeta":      tarjeta,        # pagado con tarjeta (banco, con comisión)
+        "bruto_transferencia": transferencia, # pagado por transferencia (banco, sin comisión)
+        "bruto_efectivo":     bruto - tarjeta - transferencia,  # lo que entra a caja
+        "count_rentas":       int(row["cnt"]),
     }
 
 
@@ -254,17 +257,17 @@ def _actualizar_ingresos_diarios(conn, fecha: str) -> dict:
     pickup_noche = cortes.get("noche", 0.0)                        # 8am
     efectivo     = pickup_dia + pickup_noche
 
-    # Tarjeta del día operativo (suma de las 3 franjas: noche cruza la medianoche)
-    tarjeta = sum(
-        _calcular_bruto(conn, t, fecha)["bruto_tarjeta"]
-        for t in ("manana", "tarde", "noche")
-    )
+    # Tarjeta y transferencia del día operativo (suma de las 3 franjas; la noche
+    # cruza la medianoche). Ambas van al banco (no entran a caja); la tarjeta
+    # tiene comisión del 4%, la transferencia NO.
+    brutos = [_calcular_bruto(conn, t, fecha) for t in ("manana", "tarde", "noche")]
+    tarjeta       = sum(b["bruto_tarjeta"] for b in brutos)
+    transferencia = sum(b["bruto_transferencia"] for b in brutos)
     notas_sync = "Generado desde cortes de turno v2.5"
 
     existente = conn.execute(
-        "SELECT id, monto_transferencia FROM ingresos_diarios WHERE fecha = ?", (fecha,)
+        "SELECT id FROM ingresos_diarios WHERE fecha = ?", (fecha,)
     ).fetchone()
-    transferencia = float(existente["monto_transferencia"]) if existente else 0.0
     comision   = round(tarjeta * 0.04, 2)
     total_neto = round(efectivo + tarjeta + transferencia - comision, 2)
 
