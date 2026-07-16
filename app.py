@@ -140,8 +140,11 @@ def _dash_data(db_path: str) -> dict:
             "SELECT COALESCE(SUM(total_neto),0) AS t FROM ingresos_diarios WHERE fecha=?",
             (op_hoy,)
         ).fetchone()["t"])
+        # Solo cuentan los gastos que salieron del dinero de la semana
+        # (afecta_utilidad=1). Lo pagado desde fondos o "sin descontar" no baja
+        # la utilidad ni la ganancia.
         gas_dia = float(conn.execute(
-            "SELECT COALESCE(SUM(monto),0) AS t FROM gastos_extras WHERE fecha=?",
+            "SELECT COALESCE(SUM(monto),0) AS t FROM gastos_extras WHERE afecta_utilidad=1 AND fecha=?",
             (hoy.isoformat(),)
         ).fetchone()["t"])
 
@@ -151,7 +154,7 @@ def _dash_data(db_path: str) -> dict:
             (lunes.isoformat(), hoy.isoformat())
         ).fetchone()["t"])
         gas_sem = float(conn.execute(
-            "SELECT COALESCE(SUM(monto),0) AS t FROM gastos_extras WHERE fecha BETWEEN ? AND ?",
+            "SELECT COALESCE(SUM(monto),0) AS t FROM gastos_extras WHERE afecta_utilidad=1 AND fecha BETWEEN ? AND ?",
             (lunes.isoformat(), hoy.isoformat())
         ).fetchone()["t"])
         utilidad_sem = ing_sem - gas_sem
@@ -671,17 +674,22 @@ def create_app() -> Flask:
             descripcion = f"Pago {concepto}"
             hoy         = date.today().isoformat()
 
+            fondo_id    = data.get("fondo_id")
+            sin_afectar = bool(data.get("sin_afectar", False))
+
             cur = conn.execute(
-                "INSERT INTO gastos_extras (fecha, categoria, monto, descripcion) VALUES (?,?,?,?)",
-                (hoy, categoria, monto, descripcion),
+                "INSERT INTO gastos_extras (fecha, categoria, monto, descripcion, afecta_utilidad) VALUES (?,?,?,?,?)",
+                (hoy, categoria, monto, descripcion, 0 if sin_afectar else 1),
             )
             gasto_id = cur.lastrowid
 
-            # Fondo opcional: si el usuario eligió pagarlo desde un fondo, se
-            # descuenta de ahí; si no, sale del dinero de la semana (baja utilidad).
+            # Fondo opcional: si eligió un fondo se descuenta de ahí; si eligió
+            # "sin descontar" no toca nada; si no, sale del dinero de la semana.
             fondo_row, _saldo = _descontar_de_fondo(
-                conn, data.get("fondo_id"), monto, hoy, descripcion, gasto_id
+                conn, fondo_id, monto, hoy, descripcion, gasto_id
             )
+            if fondo_row:  # pagado desde un fondo → no baja la utilidad
+                conn.execute("UPDATE gastos_extras SET afecta_utilidad=0 WHERE id=?", (gasto_id,))
             conn.commit()
             nombre_fondo = fondo_row["nombre"] if fondo_row else None
 

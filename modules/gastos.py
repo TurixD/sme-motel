@@ -157,7 +157,8 @@ def _calcular_alertas(db) -> list[dict]:
     historico_rows = db.execute("""
         SELECT categoria, strftime('%Y-%m', fecha) AS mes, SUM(monto) AS total_mes
         FROM gastos_extras
-        WHERE strftime('%Y-%m', fecha) != strftime('%Y-%m', 'now', 'localtime')
+        WHERE afecta_utilidad=1
+          AND strftime('%Y-%m', fecha) != strftime('%Y-%m', 'now', 'localtime')
           AND fecha >= date('now', 'localtime', '-92 days')
         GROUP BY categoria, mes
     """).fetchall()
@@ -169,7 +170,8 @@ def _calcular_alertas(db) -> list[dict]:
     actual_rows = db.execute("""
         SELECT categoria, SUM(monto) AS total
         FROM gastos_extras
-        WHERE strftime('%Y-%m', fecha) = strftime('%Y-%m', 'now', 'localtime')
+        WHERE afecta_utilidad=1
+          AND strftime('%Y-%m', fecha) = strftime('%Y-%m', 'now', 'localtime')
         GROUP BY categoria
     """).fetchall()
 
@@ -201,17 +203,19 @@ def index():
     cat_filtro  = request.args.get("categoria", "")
 
     with _db() as db:
+        # Los totales cuentan solo lo que salió del dinero de la semana
+        # (afecta_utilidad=1); lo pagado desde fondos o "sin descontar" no.
         resumen = {
-            "hoy":    db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE fecha = ?", (hoy,)).fetchone()[0],
-            "semana": db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE fecha >= date('now','localtime','-6 days')").fetchone()[0],
-            "mes":    db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE strftime('%Y-%m',fecha)=strftime('%Y-%m','now','localtime')").fetchone()[0],
-            "anio":   db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE strftime('%Y',fecha)=strftime('%Y','now','localtime')").fetchone()[0],
+            "hoy":    db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE afecta_utilidad=1 AND fecha = ?", (hoy,)).fetchone()[0],
+            "semana": db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE afecta_utilidad=1 AND fecha >= date('now','localtime','-6 days')").fetchone()[0],
+            "mes":    db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE afecta_utilidad=1 AND strftime('%Y-%m',fecha)=strftime('%Y-%m','now','localtime')").fetchone()[0],
+            "anio":   db.execute("SELECT COALESCE(SUM(monto),0) FROM gastos_extras WHERE afecta_utilidad=1 AND strftime('%Y',fecha)=strftime('%Y','now','localtime')").fetchone()[0],
         }
 
         chart_rows = db.execute("""
             SELECT categoria, SUM(monto) AS total
             FROM gastos_extras
-            WHERE strftime('%Y-%m', fecha) = strftime('%Y-%m', 'now', 'localtime')
+            WHERE afecta_utilidad=1 AND strftime('%Y-%m', fecha) = strftime('%Y-%m', 'now', 'localtime')
             GROUP BY categoria ORDER BY total DESC
         """).fetchall()
         chart_data = [{"categoria": r["categoria"], "total": float(r["total"])} for r in chart_rows]
@@ -271,6 +275,7 @@ def registrar():
     monto, err      = parse_monto(data.get("monto"), mayor_a_cero=True)
     descripcion     = (data.get("descripcion") or "").strip()
     fondo_id        = data.get("fondo_id")   # opcional: si se elige, sale de ese fondo
+    sin_afectar     = bool(data.get("sin_afectar", False))  # no descontar de ningún lado
     recibo_id       = data.get("recibo_id")
 
     if err:
@@ -281,18 +286,21 @@ def registrar():
         return jsonify({"error": "Categoría inválida"}), 400
 
     with _db() as db:
+        # Por defecto baja la utilidad, salvo que se pida "sin descontar".
+        afecta = 0 if sin_afectar else 1
         cur = db.execute(
-            """INSERT INTO gastos_extras (fecha, categoria, monto, descripcion, creado_en)
-               VALUES (?, ?, ?, ?, datetime('now','localtime'))""",
-            (fecha, categoria, monto, descripcion),
+            """INSERT INTO gastos_extras (fecha, categoria, monto, descripcion, afecta_utilidad, creado_en)
+               VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))""",
+            (fecha, categoria, monto, descripcion, afecta),
         )
         nuevo_id = cur.lastrowid
 
-        # Por defecto el gasto sale del dinero de la semana (ningún fondo).
-        # Solo se descuenta de un fondo si el usuario lo eligió explícitamente.
+        # Si se pagó desde un fondo (descuento real), tampoco baja la utilidad.
         fondo_row, saldo_resultado = _descontar_de_fondo(
             db, fondo_id, monto, fecha, descripcion or categoria, nuevo_id
         )
+        if fondo_row:
+            db.execute("UPDATE gastos_extras SET afecta_utilidad=0 WHERE id=?", (nuevo_id,))
 
         if recibo_id:
             recibo = db.execute(
@@ -341,6 +349,7 @@ def registrar_con_desglose():
     descripcion     = (gasto.get("descripcion") or "").strip()
     recibo_id       = gasto.get("recibo_id")
     fondo_id        = gasto.get("fondo_id")   # opcional
+    sin_afectar     = bool(gasto.get("sin_afectar", False))
 
     if categoria not in CATEGORIAS:
         return jsonify({"error": "Categoría inválida"}), 400
@@ -350,16 +359,19 @@ def registrar_con_desglose():
     movimientos_creados = 0
 
     with _db() as db:
+        afecta = 0 if sin_afectar else 1
         cur = db.execute(
-            """INSERT INTO gastos_extras (fecha, categoria, monto, descripcion, creado_en)
-               VALUES (?, ?, ?, ?, datetime('now','localtime'))""",
-            (fecha, categoria, monto, descripcion),
+            """INSERT INTO gastos_extras (fecha, categoria, monto, descripcion, afecta_utilidad, creado_en)
+               VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))""",
+            (fecha, categoria, monto, descripcion, afecta),
         )
         nuevo_id = cur.lastrowid
 
         fondo_row, saldo_resultado = _descontar_de_fondo(
             db, fondo_id, monto, fecha, descripcion or categoria, nuevo_id
         )
+        if fondo_row:
+            db.execute("UPDATE gastos_extras SET afecta_utilidad=0 WHERE id=?", (nuevo_id,))
 
         if recibo_id:
             recibo = db.execute(

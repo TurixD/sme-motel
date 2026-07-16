@@ -155,6 +155,19 @@ def migrar() -> None:
             migraciones += 1
             print("  gastos_extras: columna 'recibo_path' agregada")
 
+        # gastos_extras: afecta_utilidad (1=sale del dinero de la semana y baja la
+        # utilidad; 0=salió de un fondo o de ningún lado, no baja la utilidad)
+        if "afecta_utilidad" not in columnas_gastos:
+            conn.execute(
+                "ALTER TABLE gastos_extras ADD COLUMN afecta_utilidad INTEGER NOT NULL DEFAULT 1"
+            )
+            # Los gastos ya pagados desde un fondo dejan de afectar la utilidad
+            conn.execute(
+                "UPDATE gastos_extras SET afecta_utilidad=0 WHERE fondo_descontado_id IS NOT NULL"
+            )
+            migraciones += 1
+            print("  gastos_extras: columna 'afecta_utilidad' agregada")
+
         # recibos: hash_md5
         columnas_recibos = {row[1] for row in conn.execute("PRAGMA table_info(recibos)").fetchall()}
         if "hash_md5" not in columnas_recibos:

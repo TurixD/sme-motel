@@ -158,14 +158,15 @@
         </div>
         <div class="field-group">
             <label class="field-label" for="fondo-origen">Pagado desde</label>
-            <select class="field-input field-input--sm" id="fondo-origen" style="max-width:280px">
-                <option value="">Dinero de la semana</option>
+            <select class="field-input field-input--sm" id="fondo-origen" style="max-width:320px">
+                <option value="">Dinero de la semana (baja la utilidad)</option>
                 {% for f in fondos %}
                 <option value="{{ f.id }}">Fondo: {{ f.nombre }}</option>
                 {% endfor %}
+                <option value="nada">No descontar de ningún lado</option>
             </select>
             <span class="field-optional" style="display:block;margin-top:var(--space-1)">
-                Por defecto sale del dinero de la semana. Elige un fondo solo si lo pagaste de ahí.
+                Dinero de la semana baja tu utilidad. Un fondo sale de ese ahorro. "No descontar" solo lo marca pagado.
             </span>
         </div>
         <input type="hidden" id="recibo-id-hidden" value="">
@@ -227,7 +228,15 @@
                     <td class="mono">{{ g.fecha }}</td>
                     <td><span class="cat-pill" data-cat="{{ g.categoria }}">{{ g.categoria }}</span></td>
                     <td class="mono text-right text-expense fw-600">{{ g.monto | moneda }}</td>
-                    <td class="text-sm" style="color:var(--text-secondary)">{{ g.descripcion or '—' }}</td>
+                    <td class="text-sm" style="color:var(--text-secondary)">
+                        {{ g.descripcion or '—' }}
+                        {% if g.afecta_utilidad == 0 %}
+                        <span title="No baja la utilidad (pagado de un fondo o sin descontar)"
+                              style="font-size:var(--text-xs);color:var(--text-tertiary);border:1px solid var(--border);border-radius:4px;padding:0 5px;margin-left:6px;white-space:nowrap">
+                            {{ 'fondo' if g.fondo_descontado_id else 'sin descuento' }}
+                        </span>
+                        {% endif %}
+                    </td>
                     <td class="actions-cell">
                         <button class="btn-icon" onclick="abrirEdicion({{ g.id }})" title="Editar">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -420,15 +429,16 @@ document.getElementById('form-gasto').addEventListener('submit', async e => {
     const btn = document.getElementById('btn-registrar');
 
     const reciboId = document.getElementById('recibo-id-hidden').value;
-    const fondoId  = document.getElementById('fondo-origen').value;
+    const origen   = document.getElementById('fondo-origen').value;
     const data = {
         fecha:       document.getElementById('fecha').value,
         categoria:   document.getElementById('categoria').value,
         monto:       parseFloat(document.getElementById('monto').value) || 0,
         descripcion: document.getElementById('descripcion').value.trim(),
         ...(reciboId ? { recibo_id: parseInt(reciboId, 10) } : {}),
-        ...(fondoId  ? { fondo_id:  parseInt(fondoId, 10) }  : {}),
     };
+    if (origen === 'nada') data.sin_afectar = true;
+    else if (origen) data.fondo_id = parseInt(origen, 10);
 
     if (!data.categoria) {
         toast('Selecciona una categoría', 'error'); return;
