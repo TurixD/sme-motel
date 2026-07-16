@@ -619,14 +619,16 @@ def create_app() -> Flask:
 
     @app.before_request
     def _forzar_https():
-        # Si entran por HTTP plano (ej. http://<IP-tailscale>:5050), rebota a la
-        # URL HTTPS con certificado válido. No toca localhost (kiosco) ni lo ya
-        # cifrado (detrás del proxy, X-Forwarded-Proto=https vía ProxyFix).
+        # Rebota a la URL HTTPS SOLO si entran por otro host (ej. la IP de
+        # Tailscale por HTTP). Se decide por el HOST, no por is_secure: detrás
+        # de `tailscale serve` is_secure llega en False y usarlo causaba un
+        # bucle de redirección en la propia URL HTTPS. El host destino ya se
+        # sirve por HTTPS, así que nunca se redirige a sí mismo.
         destino = Config.HTTPS_REDIRECT_HOST
-        if not destino or request.is_secure:
+        if not destino:
             return
         host = (request.host or "").split(":")[0]
-        if host in ("localhost", "127.0.0.1", "::1"):
+        if host in (destino, "localhost", "127.0.0.1", "::1"):
             return
         url = f"https://{destino}{request.path}"
         if request.query_string:
