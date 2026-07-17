@@ -452,7 +452,7 @@ def index():
                    LEFT JOIN empleados e ON e.id = ct.empleado_id
                    WHERE ct.fecha BETWEEN ? AND ?
                    ORDER BY ct.fecha DESC,
-                            CASE ct.turno WHEN 'manana' THEN 1 WHEN 'tarde' THEN 2 ELSE 3 END""",
+                            CASE ct.turno WHEN 'noche' THEN 1 WHEN 'tarde' THEN 2 ELSE 3 END""",
                 (hace7, hoy),
             ).fetchall()
             historico_7 = [dict(r) for r in hist_rows]
@@ -690,7 +690,7 @@ def historial():
                 LEFT JOIN empleados e ON e.id = ct.empleado_id
                 {where_sql}
                 ORDER BY ct.fecha DESC,
-                         CASE ct.turno WHEN 'manana' THEN 1 WHEN 'tarde' THEN 2 ELSE 3 END
+                         CASE ct.turno WHEN 'noche' THEN 1 WHEN 'tarde' THEN 2 ELSE 3 END
                 LIMIT ? OFFSET ?""",
             params + [POR_PAGINA, offset],
         ).fetchall()
