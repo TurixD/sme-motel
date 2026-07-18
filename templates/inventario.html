@@ -14,6 +14,11 @@
         <button class="btn btn--secondary btn--sm" onclick="abrirModalAgregar()">
             + Agregar producto
         </button>
+        {% if es_sabado %}
+        <button class="btn btn--secondary btn--sm" id="btn-abrir-compras" onclick="abrirListaCompra()">
+            🛒 Lista de compra<span id="compras-count" class="btn-badge"></span>
+        </button>
+        {% endif %}
         {% if mostrar_conteo %}
         <a href="/inventario/conteo" class="btn btn--primary btn--sm">
             Hacer conteo semanal
@@ -167,6 +172,27 @@
         <div class="modal__actions">
             <button id="btn-guardar-producto" class="btn btn--primary" onclick="guardarProducto()">Agregar</button>
             <button class="btn btn--ghost" onclick="closeModal('modal-producto')">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: Lista de compra (solo sábados) ──────────────── -->
+<div id="modal-compras" class="modal" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__box modal__box--compras">
+        <h2 class="modal__title">🛒 Lista de compra</h2>
+        <p class="compras-resumen" id="compras-resumen">Cargando…</p>
+        <div id="compras-contenido">
+            <div class="compras-vacio">Cargando…</div>
+        </div>
+        <div class="modal__actions">
+            <a class="btn btn--secondary btn--sm" id="btn-pdf-compras" href="/inventario/compras.pdf?semanas=1" hidden>
+                Descargar PDF
+            </a>
+            <button class="btn btn--secondary btn--sm" id="btn-copiar-compras" onclick="copiarListaCompra()" hidden>
+                Copiar lista
+            </button>
+            <button class="btn btn--ghost btn--sm" onclick="closeModal('modal-compras')">Cerrar</button>
         </div>
     </div>
 </div>

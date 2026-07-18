@@ -5,8 +5,9 @@ inventario.py - Módulo de inventario: CRUD productos + conteo semanal (Fase 5a)
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, timedelta
+from math import ceil
 
-from flask import Blueprint, jsonify, redirect, render_template, request
+from flask import Blueprint, jsonify, make_response, redirect, render_template, request
 
 from config import Config
 from logger import get_logger, log_action
@@ -109,6 +110,7 @@ def index():
         "inventario.html",
         productos=productos,
         mostrar_conteo=_mostrar_boton_conteo(),
+        es_sabado=date.today().weekday() == 5,   # lista de compra: solo sábados
         hoy=date.today().isoformat(),
     )
 
@@ -448,6 +450,274 @@ def borrar_match(mid: int):
 
     log_action(f"matches_aprendidos: borrado id={mid} sku={match['sku_sams']}")
     return jsonify({"ok": True})
+
+
+# ── Lista de compra: consumo estimado + cantidad sugerida ──────
+
+_SIN_PROVEEDOR = "Sin proveedor"
+_CONSUMO_MAX_INTERVALOS = 8   # cuántos intervalos recientes promediar
+
+
+def _consumo_semanal_por_producto(conn) -> dict:
+    """Estima el consumo semanal de cada producto a partir del historial de
+    conteos_semanales. En un intervalo entre dos conteos:
+        gastado = cant_previa + entradas_registradas − cant_actual
+    Solo cuenta intervalos con gastado >= 0 (los negativos = el stock subió, o
+    sea hubo una compra no registrada → no es señal limpia de consumo).
+    Devuelve {inventario_id: consumo_semanal_float} solo para los que tienen
+    al menos un intervalo válido. Se topa a 2× el mínimo para acotar ruido."""
+    filas = conn.execute("""
+        SELECT inventario_id, fecha, AVG(cantidad) AS cantidad
+        FROM conteos_semanales
+        GROUP BY inventario_id, fecha
+        ORDER BY inventario_id, fecha
+    """).fetchall()
+
+    series: dict[int, list] = {}
+    for r in filas:
+        series.setdefault(r["inventario_id"], []).append((r["fecha"], r["cantidad"]))
+
+    consumo = {}
+    for inv_id, serie in series.items():
+        if len(serie) < 2:
+            continue
+        intervalos = []  # (consumo_semanal, peso_en_semanas)
+        for (d_prev, c_prev), (d_curr, c_curr) in zip(serie, serie[1:]):
+            try:
+                dias = (date.fromisoformat(d_curr) - date.fromisoformat(d_prev)).days
+            except (TypeError, ValueError):
+                continue
+            if dias <= 0:
+                continue
+            entradas = conn.execute(
+                "SELECT COALESCE(SUM(cantidad),0) FROM movimientos_inventario "
+                "WHERE inventario_id=? AND tipo='entrada' AND fecha > ? AND fecha <= ?",
+                (inv_id, d_prev, d_curr),
+            ).fetchone()[0]
+            gastado = c_prev + (entradas or 0) - c_curr
+            if gastado < 0:
+                continue
+            semanas = dias / 7.0
+            intervalos.append((gastado / semanas, semanas))
+        if not intervalos:
+            continue
+        intervalos = intervalos[-_CONSUMO_MAX_INTERVALOS:]
+        num = sum(cs * w for cs, w in intervalos)
+        den = sum(w for _, w in intervalos)
+        consumo[inv_id] = (num / den) if den else 0.0
+
+    return consumo
+
+
+def calcular_lista_compra(conn, semanas: int = 1) -> dict:
+    """Lista de compra para cubrir `semanas` semanas, agrupada por proveedor.
+
+    Por producto (activo, con stock_minimo > 0):
+        objetivo = consumo_semanal × semanas + stock_minimo
+        comprar  = ceil(objetivo − stock_actual)   (se incluye solo si > 0)
+
+    Fuente del consumo por producto:
+      - 'historial': medido de sus propios conteos.
+      - 'estimado' : no tiene señal propia → se usa la razón consumo/mínimo
+                     promedio del negocio (de los productos que sí tienen).
+      - 'minimo'   : no hay ningún historial en el negocio → solo repone al
+                     mínimo (no escala por semanas).
+    """
+    semanas = max(1, int(semanas or 1))
+    consumo_medido = _consumo_semanal_por_producto(conn)
+
+    rows = conn.execute(f"""
+        SELECT i.id, i.nombre, i.unidad, i.proveedor_default, i.stock_minimo,
+               ({_stock_sql()}) AS stock_calculado
+        FROM inventario i
+        WHERE i.activo = 1 AND i.stock_minimo > 0
+        ORDER BY i.nombre COLLATE NOCASE
+    """).fetchall()
+
+    # Razón global consumo/mínimo (para estimar productos sin señal propia).
+    # Se topa cada razón a 1.0 para que un producto muy ruidoso (p. ej. mínimo
+    # mal puesto) no infle el estimado de todos los demás.
+    razones = [
+        min(consumo_medido[r["id"]] / r["stock_minimo"], 1.0)
+        for r in rows
+        if r["id"] in consumo_medido and r["stock_minimo"]
+    ]
+    razon_global = (sum(razones) / len(razones)) if razones else None
+
+    grupos: dict[str, list] = {}
+    total = 0
+    n_estimados = 0
+    for r in rows:
+        stock = round(r["stock_calculado"], 1)
+        minimo = r["stock_minimo"]
+
+        if r["id"] in consumo_medido:
+            consumo = min(consumo_medido[r["id"]], 2 * minimo)  # tope anti-ruido
+            fuente = "historial"
+        elif razon_global is not None:
+            consumo = min(razon_global * minimo, 2 * minimo)
+            fuente = "estimado"
+        else:
+            consumo = None
+            fuente = "minimo"
+
+        if consumo is not None:
+            objetivo = consumo * semanas + minimo
+        else:
+            objetivo = float(minimo)  # sin dato: solo repone al mínimo
+
+        deficit = objetivo - stock
+        if deficit <= 0:
+            continue
+        sugerido = max(1, ceil(deficit))
+
+        if fuente == "estimado":
+            n_estimados += 1
+
+        proveedor = (r["proveedor_default"] or "").strip() or _SIN_PROVEEDOR
+        grupos.setdefault(proveedor, []).append({
+            "id": r["id"],
+            "nombre": r["nombre"],
+            "unidad": r["unidad"] or "",
+            "stock_actual": stock,
+            "stock_minimo": minimo,
+            "consumo_semanal": round(consumo, 1) if consumo is not None else None,
+            "fuente": fuente,
+            "sugerido": sugerido,
+        })
+        total += 1
+
+    def _orden(nombre: str):
+        return (1, "") if nombre == _SIN_PROVEEDOR else (0, nombre.lower())
+
+    lista = [
+        {"proveedor": prov, "items": items}
+        for prov, items in sorted(grupos.items(), key=lambda kv: _orden(kv[0]))
+    ]
+
+    return {
+        "ok": True,
+        "semanas": semanas,
+        "total": total,
+        "n_estimados": n_estimados,
+        "hay_historial": bool(consumo_medido),
+        "grupos": lista,
+    }
+
+
+@inventario_bp.route("/inventario/api/compras")
+@solo_admin
+def api_compras():
+    """Lista de compra en JSON. ?semanas=N (default 1, para el botón del sábado)."""
+    try:
+        semanas = max(1, min(12, int(request.args.get("semanas", 1))))
+    except (TypeError, ValueError):
+        semanas = 1
+    with _db() as conn:
+        data = calcular_lista_compra(conn, semanas)
+    return jsonify(data)
+
+
+@inventario_bp.route("/inventario/compras.pdf")
+@solo_admin
+def compras_pdf():
+    """Descarga la lista de compra como PDF. ?semanas=N (default 1)."""
+    try:
+        semanas = max(1, min(12, int(request.args.get("semanas", 1))))
+    except (TypeError, ValueError):
+        semanas = 1
+    with _db() as conn:
+        data = calcular_lista_compra(conn, semanas)
+
+    pdf_bytes = _lista_compra_pdf(data)
+    nombre = f"lista_compra_{semanas}sem_{date.today().isoformat()}.pdf"
+    resp = make_response(bytes(pdf_bytes))
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return resp
+
+
+def _fmt_num(n) -> str:
+    """9.0 → '9', 2.5 → '2.5'."""
+    if n is None:
+        return "—"
+    n = round(float(n), 1)
+    return str(int(n)) if n == int(n) else str(n)
+
+
+def _lista_compra_pdf(data: dict) -> bytearray:
+    """Genera el PDF (bytes) de una lista de compra ya calculada."""
+    from fpdf import FPDF
+
+    semanas = data["semanas"]
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    ancho = pdf.w - 2 * pdf.l_margin
+
+    def txt(s):
+        # fpdf core fonts = latin-1; reemplaza lo que no entre
+        return str(s).encode("latin-1", "replace").decode("latin-1")
+
+    periodo = "1 semana" if semanas == 1 else f"{semanas} semanas"
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 9, txt("Lista de compra"), ln=1)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(110, 110, 110)
+    pdf.cell(0, 6, txt(f"Motel Hacienda del Sauz  ·  para {periodo}  ·  {date.today().isoformat()}"), ln=1)
+    if data["total"]:
+        n_prov = len(data["grupos"])
+        pdf.cell(0, 6, txt(f"{data['total']} productos por surtir  ·  {n_prov} proveedor(es)"), ln=1)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(3)
+
+    if not data["total"]:
+        pdf.set_font("Helvetica", "", 12)
+        pdf.cell(0, 8, txt("Todo el inventario esta por encima del objetivo. Nada por comprar."), ln=1)
+        return pdf.output()
+
+    # Anchos de columna
+    w_comprar = 22
+    w_stock = 26
+    w_min = 20
+    w_prod = ancho - (w_comprar + w_stock + w_min)
+
+    for grupo in data["grupos"]:
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_fill_color(240, 240, 243)
+        pdf.cell(0, 8, txt(f"  {grupo['proveedor']}  ({len(grupo['items'])})"), ln=1, fill=True)
+
+        # Encabezado de columnas
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.cell(w_prod, 6, txt("PRODUCTO"))
+        pdf.cell(w_stock, 6, txt("TIENES"), align="R")
+        pdf.cell(w_min, 6, txt("MIN"), align="R")
+        pdf.cell(w_comprar, 6, txt("COMPRAR"), align="R", ln=1)
+        pdf.set_text_color(0, 0, 0)
+
+        for it in grupo["items"]:
+            pdf.set_font("Helvetica", "", 10)
+            nombre = it["nombre"] + (" *" if it["fuente"] == "estimado" else "")
+            unidad = f" {it['unidad']}" if it["unidad"] else ""
+            pdf.cell(w_prod, 7, txt(nombre))
+            pdf.cell(w_stock, 7, txt(_fmt_num(it["stock_actual"])), align="R")
+            pdf.cell(w_min, 7, txt(_fmt_num(it["stock_minimo"])), align="R")
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(w_comprar, 7, txt(f"+{_fmt_num(it['sugerido'])}{unidad}"), align="R", ln=1)
+
+    if data["n_estimados"]:
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.multi_cell(0, 5, txt(
+            "* Cantidad estimada con el consumo promedio del negocio (aun sin "
+            "historial propio de conteos). Se afina conforme registres mas conteos semanales."
+        ))
+        pdf.set_text_color(0, 0, 0)
+
+    return pdf.output()
 
 
 # ── API stock JSON ─────────────────────────────────────────────

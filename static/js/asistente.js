@@ -76,6 +76,11 @@ function handleEnviar() {
                     appendChangeCard(cambio);
                 });
             }
+            if (data.descargas && data.descargas.length > 0) {
+                data.descargas.forEach(function (d) {
+                    appendDownloadCard(d);
+                });
+            }
         } else if (data.limite_alcanzado) {
             showLimitAlert(data.error);
         } else {
@@ -104,6 +109,36 @@ function appendMessage(rol, contenido) {
 
     div.appendChild(burbuja);
     chatArea.insertBefore(div, loading);
+    scrollToBottom();
+}
+
+function appendDownloadCard(d) {
+    var chatArea = document.getElementById('chat-area');
+    var loading = document.getElementById('msg-loading');
+
+    var card = document.createElement('div');
+    card.className = 'descarga-card';
+
+    var info = document.createElement('div');
+    info.className = 'descarga-card__info';
+    var titulo = document.createElement('div');
+    titulo.className = 'descarga-card__titulo';
+    titulo.textContent = '📄 ' + (d.titulo || 'Documento');
+    var detalle = document.createElement('div');
+    detalle.className = 'descarga-card__detalle';
+    detalle.textContent = d.detalle || '';
+    info.appendChild(titulo);
+    info.appendChild(detalle);
+
+    var link = document.createElement('a');
+    link.className = 'btn btn--fund descarga-card__btn';
+    link.href = d.url;
+    link.textContent = 'Descargar PDF';
+    link.setAttribute('download', d.filename || '');
+
+    card.appendChild(info);
+    card.appendChild(link);
+    chatArea.insertBefore(card, loading);
     scrollToBottom();
 }
 

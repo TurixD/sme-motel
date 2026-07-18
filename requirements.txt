@@ -7,5 +7,6 @@ Flask>=3.0.0           # Framework web (servidor + plantillas)
 python-dotenv>=1.0.0   # Carga de variables sensibles desde .env
 anthropic>=0.40.0      # Cliente oficial de la API de Claude (se usa desde Fase 3)
 waitress>=3.0.0        # Servidor WSGI de produccion para Windows (autoarranque estable)
+fpdf2>=2.7.0           # Generacion de PDFs (lista de compra descargable)
 tzdata                 # Base de zonas horarias (zoneinfo) — America/Mexico_City en Windows
 pytest>=8.0            # Solo para correr los tests (tests/); no lo usa la app en runtime

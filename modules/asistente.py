@@ -98,6 +98,7 @@ REGLAS CLAVE (síguelas siempre):
 6. Si un tool devuelve un error o un problema de cobertura (una fecha quedaría sin nadie), explícalo en lenguaje claro y propón el siguiente paso concreto. NUNCA respondas solo "intenta de nuevo".
 7. Nombres tolerantes a dedazos: si consultar_empleados devuelve un match aproximado único (ej. "betzaida" → "Betzaira"), confírmalo UNA vez con el usuario y sigue.
 8. Para lecturas de dinero (ingresos, gastos, fondos, inventario) usa ejecutar_sql_lectura (solo SELECT). Para cambios de dinero de una sola operación usa proponer_cambio_datos.
+9. LISTA DE COMPRA: si Turi pide qué surtir/comprar o "una lista que me dure N semanas", usa generar_lista_compra(semanas=N) (default 1). NO calcules tú las cantidades ni consultes inventario por SQL para esto: la tool ya usa el consumo estimado de los conteos (no duplica el mínimo) y agrupa por proveedor. Comenta el resumen breve (total y por proveedor) y avisa que puede descargar el PDF con el botón; si hay productos "estimado", menciona que aún no tienen historial y la cantidad es aproximada.
 
 REGLAS DE NEGOCIO:
 - Utilidades 50/50 Turi y Gabriel.
@@ -488,6 +489,47 @@ def _tool_proponer_cambio(_input, sesion_id):
     return {"ok": True, "cambio_id": cambio_id, "requiere_confirmacion": True}
 
 
+def _tool_generar_lista_compra(_input):
+    """Calcula la lista de compra para N semanas (consumo estimado). Devuelve un
+    resumen compacto para el modelo; el PDF se descarga aparte por el frontend."""
+    from modules import inventario as INV
+    try:
+        semanas = int(_input.get("semanas") or 1)
+    except (TypeError, ValueError):
+        semanas = 1
+    semanas = max(1, min(12, semanas))
+
+    conn = _db()
+    try:
+        data = INV.calcular_lista_compra(conn, semanas)
+    finally:
+        conn.close()
+
+    proveedores = [
+        {"proveedor": g["proveedor"],
+         "productos": [
+             {"nombre": it["nombre"], "comprar": it["sugerido"],
+              "unidad": it["unidad"], "estimado": it["fuente"] == "estimado"}
+             for it in g["items"]
+         ]}
+        for g in data["grupos"]
+    ]
+    return {
+        "ok": True,
+        "semanas": semanas,
+        "total_productos": data["total"],
+        "n_estimados": data["n_estimados"],
+        "hay_historial": data["hay_historial"],
+        "proveedores": proveedores,
+        "descarga_pdf": True,
+        "nota": (
+            "Se le mostró a Turi un botón para descargar el PDF de esta lista. "
+            "Los productos marcados como estimado aún no tienen historial propio de "
+            "conteos; su cantidad se estimó con el consumo promedio del negocio."
+        ),
+    }
+
+
 def _tool_buscar_conversaciones(_input):
     fecha_desde = (_input.get("fecha_desde") or "").strip()
     fecha_hasta = (_input.get("fecha_hasta") or "").strip()
@@ -535,6 +577,8 @@ def _ejecutar_tool(nombre, inp, sesion_id):
         return _tool_proponer_cambio(inp, sesion_id)
     elif nombre == "buscar_conversaciones_pasadas":
         return _tool_buscar_conversaciones(inp)
+    elif nombre == "generar_lista_compra":
+        return _tool_generar_lista_compra(inp)
     elif nombre in _TOOLS_TURNOS:
         return _tool_turnos(nombre, inp, sesion_id)
     return {"ok": False, "error": f"Tool desconocida: {nombre}"}
@@ -609,6 +653,7 @@ def api_mensaje():
     costo_total = 0.0
     respuesta_final = None
     cambios_generados = []
+    descargas_generadas = []
 
     for _ in range(_MAX_ITER):
         try:
@@ -649,6 +694,15 @@ def api_mensaje():
                 resultado = _ejecutar_tool(block.name, block.input, sesion_id)
                 if resultado.get("cambio_id"):
                     cambios_generados.append(resultado["cambio_id"])
+                if block.name == "generar_lista_compra" and resultado.get("ok"):
+                    sem = resultado["semanas"]
+                    periodo = "1 semana" if sem == 1 else f"{sem} semanas"
+                    descargas_generadas.append({
+                        "titulo": f"Lista de compra ({periodo})",
+                        "detalle": f"{resultado['total_productos']} productos por surtir",
+                        "url": f"/inventario/compras.pdf?semanas={sem}",
+                        "filename": f"lista_compra_{sem}sem.pdf",
+                    })
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -692,6 +746,7 @@ def api_mensaje():
         "ok": True,
         "respuesta": respuesta_final,
         "cambios_pendientes": cambios_detalle,
+        "descargas": descargas_generadas,
         "costo_usd": round(costo_total, 6),
     })
 

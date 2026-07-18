@@ -218,6 +218,117 @@ function cargarMasHistorial() {
     _cargarHistorial(false);
 }
 
+/* ── Lista de compra (modal, solo sábados) ─────────────────── */
+let _comprasData = null;
+
+function abrirListaCompra() {
+    openModal("modal-compras");
+    if (!_comprasData) _cargarCompras();
+}
+
+function _fmtNum(n) {
+    // 9.0 → "9", 2.5 → "2.5"
+    return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+}
+
+async function _cargarCompras() {
+    try {
+        const r = await fetch("/inventario/api/compras");
+        const data = await r.json();
+        if (!data.ok) return;
+        _comprasData = data;
+        _renderCompras(data);
+        const badge = document.getElementById("compras-count");
+        if (badge) badge.textContent = data.total > 0 ? String(data.total) : "";
+    } catch {
+        const cont = document.getElementById("compras-contenido");
+        if (cont)
+            cont.innerHTML =
+                '<div class="compras-vacio compras-vacio--error">Error al cargar la lista</div>';
+    }
+}
+
+function _renderCompras(data) {
+    const cont = document.getElementById("compras-contenido");
+    const resumen = document.getElementById("compras-resumen");
+    const btnCopiar = document.getElementById("btn-copiar-compras");
+    const btnPdf = document.getElementById("btn-pdf-compras");
+    if (!cont) return;
+
+    if (!data.total) {
+        cont.innerHTML =
+            '<div class="compras-vacio compras-vacio--ok">' +
+            '<span class="compras-vacio__check">✓</span>' +
+            "Todo el inventario está por encima del mínimo.</div>";
+        if (resumen) resumen.textContent = "Nada por comprar 🎉";
+        if (btnCopiar) btnCopiar.setAttribute("hidden", "");
+        if (btnPdf) btnPdf.setAttribute("hidden", "");
+        return;
+    }
+
+    if (resumen) {
+        const nProv = data.grupos.length;
+        resumen.textContent =
+            `${data.total} ${data.total === 1 ? "producto" : "productos"} por surtir` +
+            ` · ${nProv} ${nProv === 1 ? "proveedor" : "proveedores"}`;
+    }
+    if (btnCopiar) btnCopiar.removeAttribute("hidden");
+    if (btnPdf) btnPdf.removeAttribute("hidden");
+
+    let html = "";
+    data.grupos.forEach((g) => {
+        const n = g.items.length;
+        html +=
+            '<div class="compras-grupo">' +
+            '<div class="compras-grupo__head">' +
+            `<span class="compras-grupo__prov">${_escMatch(g.proveedor)}</span>` +
+            `<span class="compras-grupo__count">${n} ${n === 1 ? "producto" : "productos"}</span>` +
+            "</div>" +
+            '<ul class="compras-lista">';
+        g.items.forEach((it) => {
+            const unidad = it.unidad ? ` ${_escMatch(it.unidad)}` : "";
+            const est = it.fuente === "estimado" ? '<span class="compras-item__est" title="Cantidad estimada (aún sin historial propio de conteos)">*</span>' : "";
+            html +=
+                '<li class="compras-item">' +
+                '<div class="compras-item__info">' +
+                `<span class="compras-item__nombre">${_escMatch(it.nombre)}${est}</span>` +
+                `<span class="compras-item__stock">tienes ${_fmtNum(it.stock_actual)} · mín ${_fmtNum(it.stock_minimo)}</span>` +
+                "</div>" +
+                `<span class="compras-item__sugerido">+${_fmtNum(it.sugerido)}${unidad}</span>` +
+                "</li>";
+        });
+        html += "</ul></div>";
+    });
+    if (data.n_estimados) {
+        html +=
+            '<p class="compras-nota">* Cantidad estimada con el consumo promedio del negocio ' +
+            "(aún sin historial propio). Se afina conforme registres más conteos.</p>";
+    }
+    cont.innerHTML = html;
+}
+
+function copiarListaCompra() {
+    if (!_comprasData || !_comprasData.total) return;
+    const lineas = ["🛒 Lista de compra — SME", ""];
+    _comprasData.grupos.forEach((g) => {
+        lineas.push(`— ${g.proveedor} —`);
+        g.items.forEach((it) => {
+            const unidad = it.unidad ? ` ${it.unidad}` : "";
+            lineas.push(`  • ${it.nombre}: ${_fmtNum(it.sugerido)}${unidad}`);
+        });
+        lineas.push("");
+    });
+    const texto = lineas.join("\n").trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto).then(
+            () => toast("Lista copiada", "success"),
+            () => toast("No se pudo copiar", "error")
+        );
+    } else {
+        toast("Copiar no disponible en este navegador", "error");
+    }
+}
+
 /* ── Tabs (Sub-fase 5C) ────────────────────────────────────── */
 let _catalogoInventario = null;
 let _matchesData = [];
@@ -385,4 +496,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     _initTabs();
+    // Precargar la lista de compra solo si el botón del sábado está presente,
+    // para mostrar el contador y que el pop-up abra al instante.
+    if (document.getElementById("btn-abrir-compras")) _cargarCompras();
 });

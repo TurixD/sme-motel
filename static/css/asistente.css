@@ -141,6 +141,35 @@
     align-self: stretch;
 }
 
+.descarga-card {
+    border: 1px solid var(--accent-fund);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    background: color-mix(in srgb, var(--accent-fund) 6%, var(--bg-secondary));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    align-self: stretch;
+}
+
+.descarga-card__titulo {
+    font-weight: 600;
+    font-size: var(--text-sm);
+}
+
+.descarga-card__detalle {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    margin-top: 2px;
+}
+
+.descarga-card__btn {
+    flex-shrink: 0;
+    text-decoration: none;
+}
+
 .cambio-card--danger {
     border-color: var(--status-error);
     background: color-mix(in srgb, var(--status-error) 5%, var(--bg-secondary));

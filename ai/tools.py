@@ -53,6 +53,27 @@ TOOLS = [
         },
     },
     {
+        "name": "generar_lista_compra",
+        "description": (
+            "Genera una lista de compra de inventario para cubrir cierto número de SEMANAS, "
+            "con la cantidad sugerida a comprar por producto (basada en el consumo estimado de "
+            "los conteos, NO en duplicar el mínimo) y agrupada por proveedor. Úsala cuando Turi "
+            "pida algo como 'dame una lista para comprar que me dure dos semanas' o 'qué necesito "
+            "surtir'. Devuelve el resumen para que lo comentes y además el sistema le ofrece a Turi "
+            "un botón para descargar la lista en PDF. Si Turi no dice cuántas semanas, asume 1."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "semanas": {
+                    "type": "integer",
+                    "description": "Número de semanas que debe cubrir la compra (1 a 12). Default 1.",
+                }
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "buscar_conversaciones_pasadas",
         "description": (
             "Busca en el historial de conversaciones anteriores del asistente. "
