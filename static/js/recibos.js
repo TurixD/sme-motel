@@ -206,17 +206,27 @@
 
         badge.textContent = anal.productos.length + ' productos detectados';
 
-        var sumaDetectada = anal.productos.reduce(function (s, p) { return s + (p.precio_total || 0); }, 0);
-        var totalTicket   = anal.monto || 0;
-        var diff          = totalTicket - sumaDetectada;
+        var totalTicket = anal.monto || 0;
 
-        if (Math.abs(diff) > 0.01) {
-            diffEl.hidden = false;
-            diffEl.textContent = 'Suma detectada: $' + sumaDetectada.toFixed(2)
-                + '  ·  Total ticket: $' + totalTicket.toFixed(2)
-                + '  ·  Diferencia: $' + diff.toFixed(2) + ' (impuestos/descuentos — normal)';
-        } else {
-            diffEl.hidden = true;
+        // Recalcula la suma/diferencia y el contador con las filas que QUEDAN
+        // (se actualiza al editar cantidades/precios o al quitar líneas).
+        function recalcularDiff() {
+            var rows = tbody.querySelectorAll('tr[data-idx]');
+            var suma = 0;
+            rows.forEach(function (tr) {
+                suma += parseFloat(tr.querySelector('.desglose-total').value) || 0;
+            });
+            badge.textContent = rows.length + ' producto' + (rows.length === 1 ? '' : 's')
+                + ' detectado' + (rows.length === 1 ? '' : 's');
+            var diff = totalTicket - suma;
+            if (Math.abs(diff) > 0.01) {
+                diffEl.hidden = false;
+                diffEl.textContent = 'Suma detectada: $' + suma.toFixed(2)
+                    + '  ·  Total ticket: $' + totalTicket.toFixed(2)
+                    + '  ·  Diferencia: $' + diff.toFixed(2) + ' (impuestos/descuentos/personales — normal)';
+            } else {
+                diffEl.hidden = true;
+            }
         }
 
         _aprendidoPorIdx = {};
@@ -268,7 +278,10 @@
                 + '<td><input class="field-input field-input--sm desglose-total" type="number" min="0" step="any"'
                 + ' value="' + (prod.precio_total || 0) + '" data-idx="' + idx + '" readonly></td>'
                 + tdMatch
-                + '<td>' + icono + '</td>';
+                + '<td class="desglose-acciones">' + icono
+                + ' <button type="button" class="desglose-del-btn" data-idx="' + idx + '"'
+                + ' title="Quitar esta línea (personal / no registrar)" aria-label="Quitar línea">&times;</button>'
+                + '</td>';
 
             tbody.appendChild(tr);
         });
@@ -281,6 +294,7 @@
                 var c  = parseFloat(tr.querySelector('.desglose-cant').value) || 0;
                 var u  = parseFloat(tr.querySelector('.desglose-unit').value) || 0;
                 tr.querySelector('.desglose-total').value = (c * u).toFixed(2);
+                recalcularDiff();
             });
         });
 
@@ -320,6 +334,17 @@
                 openModal('modal-nuevo-producto');
             });
         });
+
+        // Botones "quitar línea" (productos personales que no se registran)
+        tbody.querySelectorAll('.desglose-del-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var tr = tbody.querySelector('tr[data-idx="' + this.dataset.idx + '"]');
+                if (tr) tr.remove();
+                recalcularDiff();
+            });
+        });
+
+        recalcularDiff();
 
         desglosePanel.hidden = false;
         desglosePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

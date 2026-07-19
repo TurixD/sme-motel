@@ -103,7 +103,7 @@
                     <th class="text-right" style="width:110px">P. Unit.</th>
                     <th class="text-right" style="width:110px">P. Total</th>
                     <th>Match inventario</th>
-                    <th style="width:36px"></th>
+                    <th style="width:64px"></th>
                 </tr>
             </thead>
             <tbody id="desglose-tbody"></tbody>
@@ -442,6 +442,20 @@ document.getElementById('form-gasto').addEventListener('submit', async e => {
 
     if (!data.categoria) {
         toast('Selecciona una categoría', 'error'); return;
+    }
+
+    // Guarda contra el error de guardar sin actualizar inventario: si hay un
+    // desglose de Sam's visible con productos, avisa antes de registrar así.
+    const desglosePanel = document.getElementById('desglose-panel');
+    if (desglosePanel && !desglosePanel.hidden &&
+        desglosePanel.querySelectorAll('#desglose-tbody tr[data-idx]').length > 0) {
+        const seguir = confirm(
+            'Hay un desglose de productos de Sam’s detectado arriba.\n\n' +
+            'Si guardas aquí, el gasto se registra pero el INVENTARIO NO se actualiza.\n' +
+            'Para actualizar el inventario usa el botón "Confirmar y guardar todo" del desglose.\n\n' +
+            '¿Guardar de todos modos SIN tocar el inventario?'
+        );
+        if (!seguir) return;
     }
 
     btn.disabled = true; btn.textContent = 'Registrando…';

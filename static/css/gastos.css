@@ -596,6 +596,27 @@ select.field-input {
     white-space: nowrap;
 }
 
+.desglose-acciones {
+    white-space: nowrap;
+}
+
+.desglose-del-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: var(--radius-sm);
+    transition: color var(--transition-hover), background-color var(--transition-hover);
+}
+
+.desglose-del-btn:hover {
+    color: var(--accent-expense);
+    background-color: rgba(255,122,138,0.12);
+}
+
 .desglose-actions {
     display: flex;
     gap: var(--space-3);
