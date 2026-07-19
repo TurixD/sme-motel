@@ -282,6 +282,7 @@ async function guardarConteo() {
         }
 
         btn.setAttribute("hidden", "");
+        btn.style.display = "none";   // robusto aunque .btn tenga display propio / CSS en caché
         const resumen = document.getElementById("conteo-resumen");
         resumen.removeAttribute("hidden");
         const difMsg = data.diferencias > 0

@@ -10,6 +10,13 @@
     padding: 0;
 }
 
+/* El atributo HTML `hidden` debe ocultar siempre, incluso en elementos con
+   display propio (p. ej. .btn { display: inline-flex }). Sin esto, ocultar un
+   botón con setAttribute("hidden") no funcionaba (bug del botón de conteo). */
+[hidden] {
+    display: none !important;
+}
+
 html {
     font-size: 16px;
 }
