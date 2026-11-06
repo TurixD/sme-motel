@@ -1,0 +1,80 @@
+{#- Banner del mes. Estado calculado en app.py (_banner_mes) e inyectado por el
+    context processor como mes_banner. El nombre grande es siempre el mes actual;
+    en los últimos 5 días se adelanta la decoración del mes siguiente si tiene tema.
+    Previsualizar: ?mes=N (1-12) y ?dia=N. SVG portados de prototipo_banner_mes.html -#}
+<section class="mes-banner{{ ' mes-banner--enero' if mes_banner.es_enero }}" aria-label="Mes actual">
+
+    {%- if mes_banner.tiene_guirnalda %}
+    <div class="mes-banner__guirnalda" aria-hidden="true">
+        <svg class="mes-banner__hilo" viewBox="0 0 1232 30" preserveAspectRatio="none"><path d="M-6,4 Q616,26 1238,4" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5"></path></svg>
+        <div class="mes-banner__guirnalda-row">
+            {%- for g in mes_banner.guirnalda %}
+            <div class="mes-banner__pieza" style="margin-top:{{ g.mt }}px">
+                {%- if g.bandera %}<svg width="50" height="60" viewBox="0 0 52 62"><path fill="{{ g.fill }}" fill-opacity="0.92" fill-rule="evenodd" d="M0,0 H52 V56 a6.5,6.5 0 0 1 -13,0 a6.5,6.5 0 0 1 -13,0 a6.5,6.5 0 0 1 -13,0 a6.5,6.5 0 0 1 -13,0 Z M35,28 a9,9 0 1 0 -18,0 a9,9 0 1 0 18,0 Z M30,28 a4,4 0 1 0 -8,0 a4,4 0 1 0 8,0 Z M11,8 l4,4 -4,4 -4,-4 Z M41,8 l4,4 -4,4 -4,-4 Z M11,40 l4,4 -4,4 -4,-4 Z M41,40 l4,4 -4,4 -4,-4 Z M26,4 l3,4 -3,4 -3,-4 Z M26,44 l3,4 -3,4 -3,-4 Z"></path></svg>{% endif -%}
+                {%- if g.banderin %}<svg width="50" height="52" viewBox="0 0 50 52"><path d="M2,0 H48 L25,48 Z" fill="{{ g.fill }}" fill-opacity="0.92"></path><path d="M19,12 q3,-4 6,-1 q3,-3 6,1 q-3,0 -4,3 q-2,-2 -4,0 q-1,-3 -4,-3 Z" fill="#0F0F14" opacity="0.55"></path></svg>{% endif -%}
+                {%- if g.arana %}<svg width="50" height="96" viewBox="0 0 50 96"><line x1="25" y1="0" x2="25" y2="{{ g.hang }}" stroke="#9A9AA8" stroke-width="1"></line><g transform="translate(25 {{ g.cy }})"><g fill="none" stroke="#C8C8D2" stroke-width="1.7" stroke-linecap="round"><path d="M-4,-1 q-7,-7 -12,-3 M-5,2 q-8,-3 -13,2 M-5,5 q-7,1 -11,7 M-4,8 q-5,4 -7,10"></path><path d="M4,-1 q7,-7 12,-3 M5,2 q8,-3 13,2 M5,5 q7,1 11,7 M4,8 q5,4 7,10"></path></g><ellipse cx="0" cy="6" rx="6.5" ry="8" fill="#D4D4DC"></ellipse><circle cx="0" cy="-4" r="4.5" fill="#D4D4DC"></circle><circle cx="-1.8" cy="-4.5" r="1.1" fill="#E5484D"></circle><circle cx="1.8" cy="-4.5" r="1.1" fill="#E5484D"></circle></g></svg>{% endif -%}
+                {%- if g.corazon %}<svg width="50" height="80" viewBox="0 0 50 80"><line x1="25" y1="0" x2="25" y2="{{ g.hang }}" stroke="#6A6A78" stroke-width="1.2"></line><path transform="translate(25 {{ g.cy }})" d="M0,-5 C-5,-13 -17,-8 -11,2 L0,13 L11,2 C17,-8 5,-13 0,-5 Z" fill="{{ g.fill }}"></path></svg>{% endif -%}
+                {%- if g.contorno %}<svg width="50" height="80" viewBox="0 0 50 80"><line x1="25" y1="0" x2="25" y2="{{ g.hang }}" stroke="#6A6A78" stroke-width="1.2"></line><path transform="translate(25 {{ g.cy }}) scale(0.8)" d="M0,-5 C-5,-13 -17,-8 -11,2 L0,13 L11,2 C17,-8 5,-13 0,-5 Z" fill="none" stroke="{{ g.fill }}" stroke-width="2.4" stroke-linejoin="round"></path></svg>{% endif -%}
+                {%- if g.sobre %}<svg width="50" height="80" viewBox="0 0 50 80"><line x1="25" y1="0" x2="25" y2="{{ g.hang }}" stroke="#6A6A78" stroke-width="1.2"></line><g transform="translate(25 {{ g.cy }})"><rect x="-13" y="-9" width="26" height="18" rx="2" fill="#FFD6E0"></rect><path d="M-13,-8 L0,2 L13,-8" fill="none" stroke="#E79AAE" stroke-width="1.5" stroke-linejoin="round"></path><path d="M0,1 C-2,-2 -6,-1 -4,2 L0,6 L4,2 C6,-1 2,-2 0,1 Z" fill="#E5484D"></path></g></svg>{% endif -%}
+                {%- if g.estrella %}<svg width="50" height="80" viewBox="0 0 50 80"><line x1="25" y1="0" x2="25" y2="{{ g.hang }}" stroke="#6A6A78" stroke-width="1.2"></line><path transform="translate(25 {{ g.cy }})" d="M0,-11 L3,-3 11,0 3,3 0,11 -3,3 -11,0 -3,-3 Z" fill="{{ g.fill }}"></path></svg>{% endif -%}
+                {%- if g.foco %}<svg width="50" height="58" viewBox="0 0 50 58" style="{{ g.glow }}"><g transform="rotate({{ g.rot }} 25 4) translate(25 4) scale(0.85) translate(-25 -4)"><rect x="21" y="3" width="8" height="9" rx="1.5" fill="#6A6A78"></rect><path d="M25,11 C34,13 35,27 25,37 C15,27 16,13 25,11 Z" fill="{{ g.fill }}"></path></g></svg>{% endif -%}
+            </div>
+            {%- endfor %}
+        </div>
+    </div>
+    {%- endif %}
+
+    {%- if mes_banner.deco.navidad %}
+    <svg class="mes-banner__overlay" aria-hidden="true" viewBox="0 0 1232 250" preserveAspectRatio="none"><path class="mes-banner__nieve" d="{{ mes_banner.nieve }}" fill="#E8E8EE" opacity="0.55"></path><g fill="none" stroke="#E8E8EE" stroke-width="1.6" stroke-linecap="round" opacity="0.6"><path d="M430,150 v20 M421,155 l18,10 M421,165 l18,-10"></path><path d="M640,120 v16 M633,124 l14,8 M633,132 l14,-8"></path><path d="M780,196 v22 M770,201 l20,12 M770,213 l20,-12"></path><path d="M560,212 v14 M554,215 l12,7 M554,222 l12,-7"></path><path d="M880,128 v16 M873,132 l14,8 M873,140 l14,-8"></path></g></svg>
+    {%- endif %}
+    {%- if mes_banner.deco.botellas %}
+    <svg class="mes-banner__overlay mes-banner__botellas" aria-hidden="true" viewBox="0 0 1232 250" preserveAspectRatio="xMidYMax meet">
+        <g transform="translate(80 246) rotate(25) scale(0.85)"><g>
+            <path d="M-17,0 Q-17,4 -13,4 H13 Q17,4 17,0 V-70 C17,-84 6,-86 6,-96 V-122 H-6 V-96 C-6,-86 -17,-84 -17,-70 Z" fill="#2E7D4F"></path>
+            <path d="M-10,-8 V-66" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3" stroke-linecap="round"></path>
+            <rect x="-14" y="-58" width="28" height="26" rx="2" fill="#F3E9D2"></rect>
+            <rect x="-14" y="-52" width="28" height="3" fill="#FFC857"></rect>
+            <rect x="-14" y="-40" width="28" height="3" fill="#FFC857"></rect>
+            <path d="M-6.5,-104 H6.5 V-124 H-6.5 Z" fill="#FFC857"></path>
+            <g fill="#F3E9D2"><circle cx="0" cy="-134" r="4.5"></circle><circle cx="-7" cy="-145" r="3.5"></circle><circle cx="6" cy="-149" r="4"></circle><circle cx="-1" cy="-160" r="3"></circle><circle cx="-12" cy="-163" r="2.2"></circle><circle cx="11" cy="-168" r="2.6"></circle><circle cx="2" cy="-176" r="2"></circle></g>
+            <g fill="#FFC857"><circle cx="-5" cy="-184" r="1.8"></circle><circle cx="8" cy="-188" r="1.5"></circle><circle cx="-14" cy="-178" r="1.4"></circle><circle cx="15" cy="-180" r="1.6"></circle></g>
+            <g stroke="#F3E9D2" stroke-width="1.6" stroke-linecap="round" opacity="0.8"><path d="M-4,-140 L-16,-158 M4,-140 L16,-160 M0,-142 V-170"></path></g>
+            <rect x="18" y="-206" width="9" height="12" rx="3" fill="#C9A06A" transform="rotate(30 22 -200)"></rect>
+        </g></g>
+        <g transform="translate(1152 246) rotate(-25) scale(0.85)"><g>
+            <path d="M-17,0 Q-17,4 -13,4 H13 Q17,4 17,0 V-70 C17,-84 6,-86 6,-96 V-122 H-6 V-96 C-6,-86 -17,-84 -17,-70 Z" fill="#2E7D4F"></path>
+            <path d="M-10,-8 V-66" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3" stroke-linecap="round"></path>
+            <rect x="-14" y="-58" width="28" height="26" rx="2" fill="#F3E9D2"></rect>
+            <rect x="-14" y="-52" width="28" height="3" fill="#FFC857"></rect>
+            <rect x="-14" y="-40" width="28" height="3" fill="#FFC857"></rect>
+            <path d="M-6.5,-104 H6.5 V-124 H-6.5 Z" fill="#FFC857"></path>
+            <g fill="#F3E9D2"><circle cx="0" cy="-134" r="4.5"></circle><circle cx="-7" cy="-145" r="3.5"></circle><circle cx="6" cy="-149" r="4"></circle><circle cx="-1" cy="-160" r="3"></circle><circle cx="-12" cy="-163" r="2.2"></circle><circle cx="11" cy="-168" r="2.6"></circle><circle cx="2" cy="-176" r="2"></circle></g>
+            <g fill="#FFC857"><circle cx="-5" cy="-184" r="1.8"></circle><circle cx="8" cy="-188" r="1.5"></circle><circle cx="-14" cy="-178" r="1.4"></circle><circle cx="15" cy="-180" r="1.6"></circle></g>
+            <g stroke="#F3E9D2" stroke-width="1.6" stroke-linecap="round" opacity="0.8"><path d="M-4,-140 L-16,-158 M4,-140 L16,-160 M0,-142 V-170"></path></g>
+            <rect x="18" y="-206" width="9" height="12" rx="3" fill="#C9A06A" transform="rotate(30 22 -200)"></rect>
+        </g></g>
+    </svg>
+    {%- endif %}
+
+    <div class="mes-banner__texto">
+        <p class="mes-banner__mes">{{ mes_banner.nombre }}</p>
+        <div class="mes-banner__meta">
+            <span class="mes-banner__anio">{{ mes_banner.anio }}</span>
+            {%- if mes_banner.tag %}<span class="mes-banner__tag" style="color:{{ mes_banner.color }};border-color:{{ mes_banner.color }}">{{ mes_banner.tag }}</span>{% endif %}
+        </div>
+    </div>
+
+    <div class="mes-banner__deco" aria-hidden="true">
+        {%- if mes_banner.deco.corazones %}
+        <svg viewBox="0 0 240 120"><path d="M150,92 L224,30" stroke="#FFC857" stroke-width="3" stroke-linecap="round"></path><path d="M188,44 C172,22 142,36 156,60 L188,94 L220,60 C234,36 204,22 188,44 Z" fill="#FF5A8A"></path><path d="M176,72 L224,30" stroke="#FFC857" stroke-width="3" stroke-linecap="round"></path><path d="M229,26 L214,30 L222,40 Z" fill="#FFC857"></path><path d="M150,92 l-7,-1 M150,92 l1,7 M155,88 l-7,-1 M155,88 l1,7" stroke="#FFC857" stroke-width="2.5" stroke-linecap="round"></path><path d="M228,96 C225,91 218,94 220,99 L228,107 L236,99 C238,94 231,91 228,96 Z" fill="#C084FC"></path></svg>
+        {%- elif mes_banner.deco.patrias %}
+        <svg viewBox="0 0 240 120"><g transform="translate(186 62)" stroke-linecap="round" stroke-width="3"><path d="M0,0 L0,-38" stroke="#1FA35B"></path><path d="M0,0 L27,-27" stroke="#F2F2F2"></path><path d="M0,0 L38,0" stroke="#E5484D"></path><path d="M0,0 L27,27" stroke="#1FA35B"></path><path d="M0,0 L0,38" stroke="#F2F2F2"></path><path d="M0,0 L-27,27" stroke="#E5484D"></path><path d="M0,0 L-38,0" stroke="#1FA35B"></path><path d="M0,0 L-27,-27" stroke="#F2F2F2"></path></g><g transform="translate(186 62)" fill="#FFC857"><circle cx="0" cy="-38" r="3"></circle><circle cx="27" cy="-27" r="3"></circle><circle cx="38" cy="0" r="3"></circle><circle cx="27" cy="27" r="3"></circle><circle cx="0" cy="38" r="3"></circle><circle cx="-27" cy="27" r="3"></circle><circle cx="-38" cy="0" r="3"></circle><circle cx="-27" cy="-27" r="3"></circle><circle r="6"></circle></g></svg>
+        {%- elif mes_banner.deco.halloween %}
+        <svg viewBox="0 0 240 120"><g transform="translate(176 72)"><path d="M-2,-34 C-2,-42 2,-46 8,-48" fill="none" stroke="#5EE8B4" stroke-width="4" stroke-linecap="round"></path><ellipse cx="-20" cy="0" rx="22" ry="32" fill="#E86A17"></ellipse><ellipse cx="20" cy="0" rx="22" ry="32" fill="#E86A17"></ellipse><ellipse cx="0" cy="0" rx="22" ry="34" fill="#FF8A1F"></ellipse><g fill="#0F0F14"><path d="M-22,-10 L-12,-22 L-4,-10 Z"></path><path d="M4,-10 L12,-22 L22,-10 Z"></path><path d="M-24,8 Q0,30 24,8 L16,10 L12,16 L6,11 L0,18 L-6,11 L-12,16 L-16,10 Z"></path></g></g><g fill="#C084FC"><path d="M92,30 q6,-8 12,-2 q2,-6 5,-3 q3,-3 5,3 q6,-6 12,2 q-6,-1 -9,5 q-3,-3 -8,0 q-5,-3 -8,0 q-3,-6 -9,-5 Z"></path><path d="M216,14 q4,-5 8,-1 q1,-4 3,-2 q2,-2 3,2 q4,-4 8,1 q-4,0 -6,3 q-2,-2 -5,0 q-3,-2 -5,0 q-2,-3 -6,-3 Z"></path></g></svg>
+        {%- elif mes_banner.deco.muertos %}
+        <svg viewBox="0 0 240 120"><path d="{{ mes_banner.flores.exterior }}" fill="#FF8A1F"></path><path d="{{ mes_banner.flores.interior }}" fill="#FFB12B"></path><path d="{{ mes_banner.flores.centro }}" fill="#C8580E"></path></svg>
+        {%- elif mes_banner.deco.navidad %}
+        <svg viewBox="0 0 240 120"><g stroke="#6A6A78" stroke-width="1.5"><line x1="112" y1="0" x2="112" y2="31"></line><line x1="142" y1="0" x2="142" y2="15"></line></g><g fill="#9A9AA8"><rect x="108" y="30" width="8" height="6" rx="1.5"></rect><rect x="138" y="14" width="8" height="6" rx="1.5"></rect></g><circle cx="112" cy="48" r="13" fill="#E5484D"></circle><circle cx="142" cy="30" r="10" fill="#FFC857"></circle><g fill="#FFFFFF" opacity="0.5"><circle cx="107.5" cy="43.5" r="2.9"></circle><circle cx="138.5" cy="26.5" r="2.2"></circle></g><rect x="191" y="104" width="10" height="14" rx="2" fill="#8A5A3B"></rect><path d="M196,22 L224,62 H168 Z" fill="#2BB673"></path><path d="M196,40 L232,84 H160 Z" fill="#1FA35B"></path><path d="M196,60 L238,106 H154 Z" fill="#178A4C"></path><path d="M196,8 l3.5,7.5 8,1 -6,5.5 1.6,8 -7.1,-4 -7.1,4 1.6,-8 -6,-5.5 8,-1 Z" fill="#FFC857" style="filter: drop-shadow(0 0 6px #FFC857)"></path><g style="filter: drop-shadow(0 0 3px #FFFFFF)"><circle cx="186" cy="50" r="3" fill="#FFC857"></circle><circle cx="205" cy="56" r="3" fill="#E5484D"></circle><circle cx="178" cy="76" r="3" fill="#7BB8FF"></circle><circle cx="198" cy="72" r="3" fill="#FFC857"></circle><circle cx="216" cy="80" r="3" fill="#E5484D"></circle><circle cx="170" cy="100" r="3" fill="#FFC857"></circle><circle cx="190" cy="94" r="3" fill="#E5484D"></circle><circle cx="212" cy="98" r="3" fill="#7BB8FF"></circle><circle cx="228" cy="102" r="3" fill="#FFC857"></circle></g></svg>
+        {%- endif %}
+    </div>
+</section>

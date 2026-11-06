@@ -17,11 +17,12 @@
     <!-- Fuentes (SPEC 8.3): Inter + JetBrains Mono via Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=M+PLUS+Rounded+1c:wght@400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=M+PLUS+Rounded+1c:wght@400&display=swap" rel="stylesheet">
 
     <!-- CSS de SME -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/banner.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/gerty.css') }}">
     {% block styles %}{% endblock %}
 </head>
@@ -55,6 +56,8 @@
                 </div>
             </div>
         </header>
+
+        {% include "_banner_mes.html" %}
 
         <!-- Formulario oculto para POST /logout -->
         <form id="form-logout" action="/logout" method="POST" style="display:none"></form>

@@ -4,11 +4,13 @@ app.py - Entry point de SME (Software de Manejo de Estres).
 
 import calendar
 import json
+import math
 import sqlite3
 import time
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -46,6 +48,107 @@ _CATEGORIA_MAP = {
 
 def _fecha_es(dt: datetime) -> str:
     return f"{_DIAS_HEADER[dt.weekday()]}, {dt.day} de {_MESES[dt.month - 1]} {dt.year}"
+
+
+# ── Banner del mes (decoración temática arriba del contenido) ────────────────
+# Réplica de referencias/prototipo_banner_mes.html (renderVals). El nombre grande
+# es siempre el mes actual; en los últimos 5 días, si el mes siguiente tiene tema,
+# se adelanta su decoración. Previsualizar: ?mes=N (1-12) y ?dia=N.
+_MESES_BANNER = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+                 "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+_TEMAS_BANNER = {
+    1:  {"tag": "Año nuevo",      "deco": "confeti",   "color": "#FFC857", "g": "estrella", "cols": ["#FFC857", "#E8E8EE", "#C084FC", "#FFC857", "#5EE8B4"]},
+    2:  {"tag": "San Valentín",   "deco": "corazones", "color": "#FF5A8A", "g": "corazon",  "cols": ["#FF5A8A", "#FF7A8A", "#C084FC"]},
+    9:  {"tag": "Fiestas patrias", "deco": "patrias",  "color": "#2BB673", "g": "bandera",  "cols": ["#1FA35B", "#F2F2F2", "#E5484D"]},
+    10: {"tag": "Halloween",      "deco": "halloween", "color": "#FF8A1F", "g": "banderin", "cols": ["#FF8A1F", "#C084FC", "#A3E635"]},
+    11: {"tag": "Día de Muertos", "deco": "muertos",   "color": "#FF8A1F", "g": "bandera",  "cols": ["#C084FC", "#FF8A1F", "#FF5A8A", "#FFC857", "#5EE8B4"]},
+    12: {"tag": "Navidad",        "deco": "navidad",   "color": "#FF6B6F", "g": "foco",     "cols": ["#E5484D", "#FFC857", "#5EE8B4", "#7BB8FF"]},
+}
+
+
+def _circ(x: float, y: float, r: float) -> str:
+    return "M%.1f,%.1f a%g,%g 0 1 0 %g,0 a%g,%g 0 1 0 %g,0 Z " % (
+        x + r, y, r, r, -2 * r, r, r, 2 * r)
+
+
+def _banner_mes(mes_override=None, dia_override=None) -> dict:
+    ahora = datetime.now(ZoneInfo("America/Mexico_City"))
+    anio, n, dia = ahora.year, ahora.month, ahora.day
+    try:
+        if mes_override not in (None, ""):
+            n = max(1, min(12, int(mes_override)))
+    except (TypeError, ValueError):
+        pass
+    try:
+        if dia_override not in (None, ""):
+            dia = max(1, min(31, int(dia_override)))
+    except (TypeError, ValueError):
+        pass
+
+    sig = n % 12 + 1
+    dias_en_mes = calendar.monthrange(anio, n)[1]
+    # Últimos 5 días del mes y el siguiente tiene tema → adelanta su decoración
+    anticipo = dia > dias_en_mes - 5 and _TEMAS_BANNER.get(sig) is not None
+    t = _TEMAS_BANNER[sig] if (anticipo and _TEMAS_BANNER.get(sig)) else _TEMAS_BANNER.get(n)
+
+    guirnalda = []
+    if t and t.get("g"):
+        hangs = [12, 34, 22, 44, 18, 30]
+        for i in range(20):
+            tt = (i - 9.5) / 9.5
+            sag = 3 + 9 * (1 - tt * tt)
+            fill = t["cols"][i % len(t["cols"])]
+            arana = t["g"] == "banderin" and i in (3, 9, 15)
+            hang = [38, 56, 46][[3, 9, 15].index(i)] if arana else hangs[i % len(hangs)]
+            foco = t["g"] == "foco"
+            guirnalda.append({
+                "fill": fill, "hang": hang, "cy": hang + 12, "rot": (14 if i % 2 else -14),
+                "glow": "overflow:visible;filter:drop-shadow(0 0 5px %s) drop-shadow(0 0 12px %s)" % (fill, fill),
+                "sobre":    t["g"] == "corazon" and i % 5 == 2,
+                "contorno": t["g"] == "corazon" and i % 5 != 2 and i % 2 == 1,
+                "bandera":  t["g"] == "bandera",
+                "banderin": t["g"] == "banderin" and not arana,
+                "arana":    arana,
+                "corazon":  t["g"] == "corazon" and i % 5 != 2 and i % 2 == 0,
+                "estrella": t["g"] == "estrella",
+                "foco":     foco,
+                "mt": "%.1f" % ((sag + 1) if foco else sag),
+            })
+
+    flores = {"exterior": "", "interior": "", "centro": ""}
+    for fx, fy, s in [(184, 70, 1.0), (140, 92, 0.7), (222, 98, 0.6)]:
+        for k in range(14):
+            a = k * 2 * math.pi / 14
+            flores["exterior"] += _circ(fx + math.sin(a) * 22 * s, fy - math.cos(a) * 22 * s, 8 * s)
+        for k in range(10):
+            a = (k * 36 + 18) * math.pi / 180
+            flores["interior"] += _circ(fx + math.sin(a) * 12 * s, fy - math.cos(a) * 12 * s, 7 * s)
+        flores["centro"] += _circ(fx, fy, 7 * s)
+
+    nieve = ""
+    for k in range(70):
+        nieve += _circ((k * 197.3) % 1232, 70 + ((k * 73.7) % 175), 1.2 + (k % 4) * 0.5)
+
+    deco = {k: False for k in ("botellas", "confeti", "corazones", "patrias", "halloween", "muertos", "navidad")}
+    if t:
+        deco[t["deco"]] = True
+    es_enero = bool(t and t["deco"] == "confeti")
+    if es_enero:
+        deco["confeti"] = False
+        deco["botellas"] = True
+
+    return {
+        "nombre": _MESES_BANNER[n - 1],
+        "anio": anio,
+        "tag": t["tag"] if t else "",
+        "color": t["color"] if t else "",
+        "guirnalda": guirnalda,
+        "tiene_guirnalda": len(guirnalda) > 0,
+        "deco": deco,
+        "flores": flores,
+        "nieve": nieve,
+        "es_enero": es_enero,
+    }
 
 
 def _lunes_semana(d: date) -> date:
@@ -556,6 +659,7 @@ def create_app() -> Flask:
         usuario_nombre = admin_nombre or ("Mostrador" if modo == "empleado" else "")
         return {
             "fecha_actual":  _fecha_es(datetime.now()),
+            "mes_banner":    _banner_mes(request.args.get("mes"), request.args.get("dia")),
             "clima":         clima_obj["valor"],
             "clima_data":    clima_obj,
             "gerty_state":   _gerty_context(),

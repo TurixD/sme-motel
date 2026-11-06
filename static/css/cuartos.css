@@ -523,3 +523,48 @@
     border-color: color-mix(in srgb, var(--status-error) 35%, transparent);
     color: var(--status-error);
 }
+
+/* =============================================================
+   Layout 2 columnas en PC del mostrador (≥1100px):
+   botones a la izquierda, "Actividad del día" en panel a la derecha.
+   En celular (<1100px) se queda apilado como estaba (sin cambios).
+   ============================================================= */
+@media (min-width: 1100px) {
+    .cuartos-layout {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-6);
+    }
+    .cuartos-layout > .cuartos-section {
+        flex: 1;
+        min-width: 0;
+        margin-bottom: 0;
+    }
+    /* Panel a la derecha SIN scroll propio: la página entera hace el scroll
+       (crece con su contenido). */
+    .cuartos-layout > .actividad-section {
+        width: 440px;
+        flex-shrink: 0;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: var(--space-4);
+    }
+    .cuartos-layout > .actividad-section .feed-list {
+        border: none;
+        background: transparent;
+        border-radius: 0;
+    }
+    /* Separadores entre items (ya no los da el fondo del contenedor) */
+    .cuartos-layout > .actividad-section .feed-item {
+        border-bottom: 1px solid var(--border);
+    }
+}
+
+/* Con el panel de actividad a la derecha, el reloj grande y Gerty flotantes
+   estorbarían encima; se ocultan solo en esta pantalla a ≥1100px.
+   (En celular ya están ocultos; en tablet sin panel se mantienen.) */
+@media (min-width: 1100px) {
+    .lock-clock,
+    .gerty-widget { display: none !important; }
+}
