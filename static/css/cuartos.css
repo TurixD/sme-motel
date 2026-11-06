@@ -561,10 +561,20 @@
     }
 }
 
-/* Con el panel de actividad a la derecha, el reloj grande y Gerty flotantes
-   estorbarían encima; se ocultan solo en esta pantalla a ≥1100px.
-   (En celular ya están ocultos; en tablet sin panel se mantienen.) */
+/* Con el panel de actividad a la derecha, el reloj grande taparía el panel:
+   se oculta solo en esta pantalla a ≥1100px. Gerty se mueve a la parte
+   superior izquierda (más chico) para acompañar el nuevo diseño sin encimar
+   el panel ni el contenido. */
 @media (min-width: 1100px) {
-    .lock-clock,
-    .gerty-widget { display: none !important; }
+    .lock-clock { display: none !important; }
+    .gerty-widget {
+        inset: auto !important;
+        top: 64px !important;
+        left: 16px !important;
+        z-index: 70;
+    }
+    .gerty-widget .gerty-svg {
+        width: 68px !important;
+        height: auto !important;
+    }
 }
