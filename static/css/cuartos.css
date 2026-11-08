@@ -561,12 +561,10 @@
     }
 }
 
-/* Con el panel de actividad a la derecha, el reloj grande taparía el panel:
-   se oculta solo en esta pantalla a ≥1100px. Gerty se mueve a la parte
-   superior izquierda (más chico) para acompañar el nuevo diseño sin encimar
-   el panel ni el contenido. */
+/* En esta pantalla (≥1100px): Gerty arriba a la izquierda y el reloj —chico,
+   del tamaño de Gerty— anclado abajo a la derecha, para que ninguno tape el
+   panel de actividad. */
 @media (min-width: 1100px) {
-    .lock-clock { display: none !important; }
     .gerty-widget {
         inset: auto !important;
         top: 64px !important;
@@ -577,4 +575,13 @@
         width: 68px !important;
         height: auto !important;
     }
+
+    .lock-clock {
+        display: block !important;
+        inset: auto !important;
+        right: 24px !important;
+        bottom: 44px !important;   /* arriba de la firma del proyecto (bottom 8px) */
+        z-index: 70;
+    }
+    .lock-clock__time { font-size: 2rem !important; }
 }
