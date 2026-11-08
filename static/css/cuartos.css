@@ -567,12 +567,12 @@
 @media (min-width: 1100px) {
     .gerty-widget {
         inset: auto !important;
-        top: 64px !important;
-        left: 16px !important;
+        top: 56px !important;
+        left: 12px !important;
         z-index: 70;
     }
     .gerty-widget .gerty-svg {
-        width: 68px !important;
+        width: 150px !important;
         height: auto !important;
     }
 

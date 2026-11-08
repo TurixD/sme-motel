@@ -131,15 +131,17 @@
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (!d.ok) { rentasBox.innerHTML = ''; return; }
-                var head = '<div class="det-rentas__titulo">Cuartos rentados: <b>' + d.count + '</b></div>';
-                if (!d.count) {
+                var head = '<div class="det-rentas__titulo">Cuartos rentados: <b>' + d.count + '</b>'
+                    + (d.cancelados ? ' · <span class="det-rentas__cancel-badge">' + d.cancelados + ' cancelado' + (d.cancelados > 1 ? 's' : '') + '</span>' : '')
+                    + '</div>';
+                if (!d.rentas.length) {
                     rentasBox.innerHTML = head + '<p class="det-rentas__estado">Sin cuartos en este turno.</p>';
                     return;
                 }
                 var rows = d.rentas.map(function (x) {
-                    return '<tr>'
+                    return '<tr' + (x.cancelado ? ' class="det-rentas__fila--cancelada"' : '') + '>'
                         + '<td class="det-rentas__hora">' + x.hora + '</td>'
-                        + '<td>Cuarto ' + x.numero + '</td>'
+                        + '<td>Cuarto ' + x.numero + (x.cancelado ? ' <span class="det-rentas__cancel-badge">cancelado</span>' : '') + '</td>'
                         + '<td class="det-rentas__dur">' + x.duracion + 'h</td>'
                         + '<td class="det-rentas__metodo">' + x.metodo + '</td>'
                         + '<td class="det-rentas__precio">' + fmt(x.precio) + '</td>'

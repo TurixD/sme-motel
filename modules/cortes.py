@@ -166,11 +166,11 @@ def _rentas_turno(conn, turno: str, fecha: str) -> list:
     }[turno]
     rows = conn.execute(
         """SELECT c.numero, c.nombre_display, r.hora_registro,
-                  r.duracion_horas, r.precio_cobrado, r.es_tarjeta, r.es_transferencia
+                  r.duracion_horas, r.precio_cobrado, r.es_tarjeta, r.es_transferencia, r.estado
            FROM rentas r JOIN cuartos c ON c.id = r.cuarto_id
            WHERE (r.fecha || ' ' || r.hora_registro) >= ?
              AND (r.fecha || ' ' || r.hora_registro) <  ?
-             AND r.estado = 'activo'
+             AND r.estado IN ('activo', 'cancelado')
            ORDER BY r.hora_registro""",
         (lo, hi),
     ).fetchall()
@@ -178,12 +178,13 @@ def _rentas_turno(conn, turno: str, fecha: str) -> list:
     for r in rows:
         metodo = "Tarjeta" if r["es_tarjeta"] else ("Transferencia" if r["es_transferencia"] else "Efectivo")
         salida.append({
-            "numero":   r["numero"],
-            "nombre":   r["nombre_display"],
-            "hora":     (r["hora_registro"] or "")[:5],
-            "duracion": r["duracion_horas"],
-            "precio":   float(r["precio_cobrado"]),
-            "metodo":   metodo,
+            "numero":    r["numero"],
+            "nombre":    r["nombre_display"],
+            "hora":      (r["hora_registro"] or "")[:5],
+            "duracion":  r["duracion_horas"],
+            "precio":    float(r["precio_cobrado"]),
+            "metodo":    metodo,
+            "cancelado": r["estado"] == "cancelado",
         })
     return salida
 
@@ -547,7 +548,13 @@ def api_detalle_rentas(turno, fecha):
 
     with _db() as conn:
         rentas = _rentas_turno(conn, turno, fecha)
-    return jsonify({"ok": True, "count": len(rentas), "rentas": rentas})
+    activos = sum(1 for x in rentas if not x["cancelado"])
+    return jsonify({
+        "ok": True,
+        "count": activos,
+        "cancelados": len(rentas) - activos,
+        "rentas": rentas,
+    })
 
 
 # ── API: declarar corte ───────────────────────────────────────
