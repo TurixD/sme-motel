@@ -155,6 +155,39 @@ def _calcular_bruto(conn, turno: str, fecha: str) -> dict:
     }
 
 
+def _rentas_turno(conn, turno: str, fecha: str) -> list:
+    """Lista de rentas activas dentro de la ventana del turno (mismos límites que
+    _calcular_bruto): cuarto, hora, duración, precio y método de pago."""
+    lim = _limites_turnos(conn, fecha)
+    lo, hi = {
+        "manana": (lim["ini"],  lim["b_mt"]),
+        "tarde":  (lim["b_mt"], lim["b_tn"]),
+        "noche":  (lim["b_tn"], lim["fin"]),
+    }[turno]
+    rows = conn.execute(
+        """SELECT c.numero, c.nombre_display, r.hora_registro,
+                  r.duracion_horas, r.precio_cobrado, r.es_tarjeta, r.es_transferencia
+           FROM rentas r JOIN cuartos c ON c.id = r.cuarto_id
+           WHERE (r.fecha || ' ' || r.hora_registro) >= ?
+             AND (r.fecha || ' ' || r.hora_registro) <  ?
+             AND r.estado = 'activo'
+           ORDER BY r.hora_registro""",
+        (lo, hi),
+    ).fetchall()
+    salida = []
+    for r in rows:
+        metodo = "Tarjeta" if r["es_tarjeta"] else ("Transferencia" if r["es_transferencia"] else "Efectivo")
+        salida.append({
+            "numero":   r["numero"],
+            "nombre":   r["nombre_display"],
+            "hora":     (r["hora_registro"] or "")[:5],
+            "duracion": r["duracion_horas"],
+            "precio":   float(r["precio_cobrado"]),
+            "metodo":   metodo,
+        })
+    return salida
+
+
 def _sueldos_turno(conn, turno: str, fecha: str) -> dict:
     """Suma de sueldos de los empleados asignados a un turno según el calendario."""
     row = conn.execute(
@@ -499,6 +532,22 @@ def api_calcular_bruto(turno, fecha):
             "cuartos_tarjeta":   r["cuartos_tarjeta"], # pagos con tarjeta (no entran a caja)
             "sueldos":           r["sueldos"],         # sueldos descontados
         })
+
+
+# ── API: detalle de cuartos rentados en el turno ──────────────
+
+@cortes_bp.route("/cortes/api/detalle_rentas/<turno>/<fecha>")
+def api_detalle_rentas(turno, fecha):
+    if turno not in _TURNOS_ORDEN:
+        return jsonify({"ok": False, "error": "Turno inválido"}), 400
+    try:
+        date.fromisoformat(fecha)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Fecha inválida"}), 400
+
+    with _db() as conn:
+        rentas = _rentas_turno(conn, turno, fecha)
+    return jsonify({"ok": True, "count": len(rentas), "rentas": rentas})
 
 
 # ── API: declarar corte ───────────────────────────────────────

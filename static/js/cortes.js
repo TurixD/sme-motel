@@ -270,6 +270,7 @@
     var detEdit          = document.getElementById('det-edit');
     var detRechazar      = document.getElementById('det-rechazar');
     var detDl            = document.getElementById('det-dl');
+    var detRentas        = document.getElementById('det-rentas');
     var detTitulo        = document.getElementById('det-titulo');
     var detActions       = document.getElementById('det-actions');
     var detActionsCerrar = document.getElementById('det-actions-cerrar');
@@ -305,6 +306,34 @@
         }).join('');
     }
 
+    // Lista de cuartos rentados en el turno (cuántos y cuáles, con horarios)
+    function cargarRentas(c) {
+        if (!detRentas) return;
+        detRentas.innerHTML = '<p class="det-rentas__estado">Cargando cuartos…</p>';
+        fetch('/cortes/api/detalle_rentas/' + c.turno + '/' + c.fecha)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.ok) { detRentas.innerHTML = ''; return; }
+                var head = '<div class="det-rentas__titulo">Cuartos rentados: <b>' + d.count + '</b></div>';
+                if (!d.count) {
+                    detRentas.innerHTML = head + '<p class="det-rentas__estado">Sin cuartos en este turno.</p>';
+                    return;
+                }
+                var filas = d.rentas.map(function (x) {
+                    return '<tr>'
+                        + '<td class="det-rentas__hora">' + x.hora + '</td>'
+                        + '<td>Cuarto ' + x.numero + '</td>'
+                        + '<td class="det-rentas__dur">' + x.duracion + 'h</td>'
+                        + '<td class="det-rentas__metodo">' + x.metodo + '</td>'
+                        + '<td class="det-rentas__precio">' + fmt(x.precio) + '</td>'
+                        + '</tr>';
+                }).join('');
+                detRentas.innerHTML = head
+                    + '<table class="det-rentas__tabla"><tbody>' + filas + '</tbody></table>';
+            })
+            .catch(function () { detRentas.innerHTML = ''; });
+    }
+
     function mostrarView(c) {
         detView.hidden     = false;
         detEdit.hidden     = true;
@@ -321,6 +350,7 @@
         corteActual = c;
         detTitulo.textContent = 'Corte ' + (LABEL_TURNO[c.turno] || c.turno);
         renderDl(c);
+        cargarRentas(c);
         mostrarView(c);
         hideError(detError);
         hideError(detRecErr);
