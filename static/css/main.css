@@ -31,6 +31,17 @@ body {
     /* Espacio inferior para que el menu flotante no tape contenido */
     padding-bottom: var(--space-12);
     -webkit-font-smoothing: antialiased;
+    /* Kiosko táctil: ocultar el caret (cursor de texto) en todo lo que NO sea
+       un campo editable, para que no aparezca una "rayita" al tocar títulos,
+       banner, números, etc. Los inputs reales lo recuperan abajo. */
+    caret-color: transparent;
+}
+input,
+textarea,
+select,
+[contenteditable="true"],
+[contenteditable=""] {
+    caret-color: auto;
 }
 
 h1, h2, h3 {

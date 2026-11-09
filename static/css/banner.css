@@ -10,6 +10,10 @@
     margin: 0 0 var(--space-6);
     border-radius: var(--radius-lg);
     overflow: hidden;
+    /* Decorativo: no seleccionable ni enfocable (sin caret al tocarlo) */
+    user-select: none;
+    -webkit-user-select: none;
+    caret-color: transparent;
 }
 
 /* ── Guirnalda (arriba, de lado a lado) ── */
