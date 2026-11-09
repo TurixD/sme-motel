@@ -87,6 +87,28 @@ def _declarado_at(conn, fecha: str, turno: str):
     return row["declarado_at"] if row and row["declarado_at"] else None
 
 
+def _fin_ciclo(conn, fecha: str, now_str: str) -> str:
+    """
+    Fin del día operativo `fecha` = inicio de la mañana del día SIGUIENTE.
+
+    La noche se mantiene ABIERTA hasta que se declara su corte (igual que mañana
+    y tarde con su propio límite): la frontera queda CONGELADA en la hora de ese
+    corte. Si aún no se declara y estamos en la ventana EN VIVO 08:00–10:00 del
+    día siguiente, se extiende hasta 'ahora', de modo que un cuarto registrado a
+    esa hora (p. ej. 8am) cuente en la NOCHE y no en la mañana del día siguiente.
+    Fuera de eso (histórico/normal) el corte es duro a las 08:00.
+    """
+    fecha_sig = (date.fromisoformat(fecha) + timedelta(days=1)).isoformat()
+    dn = _declarado_at(conn, fecha, "noche")
+    if dn:
+        return dn                                   # corte de noche declarado → frontera fija
+    g0 = f"{fecha_sig} 08:00:00"
+    g1 = f"{fecha_sig} 10:00:00"
+    if g0 <= now_str < g1:
+        return now_str                              # en vivo, noche pendiente → ventana abierta
+    return g0                                        # histórico / normal → corte duro 08:00
+
+
 def _limites_turnos(conn, fecha: str, now=None) -> dict:
     """
     Límites (datetime 'YYYY-MM-DD HH:MM:SS') entre turnos del día operativo.
@@ -94,29 +116,34 @@ def _limites_turnos(conn, fecha: str, now=None) -> dict:
     La ventana de un turno se mantiene ABIERTA hasta que ese turno hace su corte:
     el límite mañana|tarde es la hora en que se declaró el corte de la mañana (si
     ya se hizo), o el tope fijo 16:00 —extendido hasta 'ahora' si aún no se corta
-    y ya pasaron las 16:00—. Igual para tarde|noche con 23:00. Así, un cuarto
-    registrado después del cambio de turno pero antes del corte cuenta en el
-    turno que todavía no ha cortado. El total del día es invariante (la tarde es
-    acumulativa): solo cambia el reparto entre turnos.
+    y ya pasaron las 16:00—. Igual para tarde|noche con 23:00. La NOCHE también:
+    su fin se mantiene abierto hasta su corte (ver _fin_ciclo), y la mañana del
+    día siguiente arranca justo donde cerró esa noche. Así un cuarto registrado
+    después del cambio de turno pero antes del corte cuenta en el turno que aún
+    no ha cortado —incluida la noche cuando se registra algo a las 8am antes de
+    cerrarla—.
     """
     now = now or datetime.now()
-    now_str   = now.strftime("%Y-%m-%d %H:%M:%S")
-    fecha_sig = (date.fromisoformat(fecha) + timedelta(days=1)).isoformat()
-    ini = f"{fecha} 08:00:00"
-    fin = f"{fecha_sig} 08:00:00"
-    dm  = _declarado_at(conn, fecha, "manana")
-    dt  = _declarado_at(conn, fecha, "tarde")
+    now_str    = now.strftime("%Y-%m-%d %H:%M:%S")
+    fecha_prev = (date.fromisoformat(fecha) - timedelta(days=1)).isoformat()
 
     def _clamp(x, lo, hi):
         return max(lo, min(x, hi))
+
+    # La mañana arranca donde cerró la noche anterior (nunca antes de las 08:00);
+    # la noche cierra con su corte (o 08:00 por defecto).
+    ini = max(_fin_ciclo(conn, fecha_prev, now_str), f"{fecha} 08:00:00")
+    fin = _fin_ciclo(conn, fecha, now_str)
+    dm  = _declarado_at(conn, fecha, "manana")
+    dt  = _declarado_at(conn, fecha, "tarde")
 
     # Sin corte: la ventana se extiende hasta 'ahora', pero ACOTADA al fin de la
     # ventana de declaración del turno (mañana ≤16:59, tarde ≤23:59). Así un
     # turno nunca declarado no se traga el siguiente (protege la noche 23:00–08:00).
     b_mt = dm if dm else _clamp(now_str, f"{fecha} 16:00:00", f"{fecha} 16:59:59")
     b_tn = dt if dt else _clamp(now_str, f"{fecha} 23:00:00", f"{fecha} 23:59:59")
-    b_mt = min(max(b_mt, ini), fin)          # ini <= b_mt <= fin
-    b_tn = min(max(b_tn, b_mt), fin)         # b_mt <= b_tn <= fin
+    b_mt = _clamp(b_mt, ini, fin)            # ini <= b_mt <= fin
+    b_tn = _clamp(b_tn, b_mt, fin)           # b_mt <= b_tn <= fin
     return {"ini": ini, "b_mt": b_mt, "b_tn": b_tn, "fin": fin}
 
 

@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, render_template, request
 from config import Config
 from logger import log_action
 from modules.auth import solo_admin, _get_modo
-from modules.cortes import _auto_cortes, _calcular_bruto, dia_operativo_efectivo
+from modules.cortes import _auto_cortes, _calcular_bruto, _limites_turnos, dia_operativo_efectivo
 
 cuartos_bp = Blueprint("cuartos", __name__)
 
@@ -56,9 +56,13 @@ def _actividad_dia(conn, es_admin: bool) -> list[dict]:
     calendario. Así la lista no se reinicia a medianoche: sigue mostrando la
     actividad del ciclo hasta las 8am, igual que el contador de rentas.
     """
-    op_day    = dia_operativo_efectivo(conn)
-    fecha     = op_day.isoformat()
-    fecha_sig = (op_day + timedelta(days=1)).isoformat()
+    op_day = dia_operativo_efectivo(conn)
+    # Mismos límites dinámicos que los cortes/contadores: el ciclo va de donde
+    # cerró la noche anterior hasta donde cierra la noche de hoy (abierta hasta
+    # su corte). Así un cuarto de las 8am antes del corte de noche sigue en la
+    # lista del ciclo y no "desaparece" al día siguiente.
+    lim    = _limites_turnos(conn, op_day.isoformat())
+    lo, hi = lim["ini"], lim["fin"]
 
     base = """
         SELECT r.id, r.cuarto_id, r.fecha, r.hora_registro, r.duracion_horas,
@@ -68,18 +72,15 @@ def _actividad_dia(conn, es_admin: bool) -> list[dict]:
                c.nombre_display, c.tipo
         FROM rentas r
         JOIN cuartos c ON c.id = r.cuarto_id
-        WHERE (
-            (r.fecha = ? AND r.hora_registro >= '08:00:00')
-            OR
-            (r.fecha = ? AND r.hora_registro < '08:00:00')
-        )
+        WHERE (r.fecha || ' ' || r.hora_registro) >= ?
+          AND (r.fecha || ' ' || r.hora_registro) <  ?
     """
     if not es_admin:
         base += " AND r.estado = 'activo'"
     base += " ORDER BY r.fecha DESC, r.hora_registro DESC"
 
     result = []
-    for r in conn.execute(base, (fecha, fecha_sig)).fetchall():
+    for r in conn.execute(base, (lo, hi)).fetchall():
         item = dict(r)
         item["editado"] = bool(item["editado"])
         item["es_tarjeta"] = bool(item["es_tarjeta"])
