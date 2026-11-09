@@ -683,6 +683,15 @@ def create_app() -> Flask:
         # context processor). Lo consume el auto-refresco del dashboard.
         return render_template("_clima_widget.html")
 
+    @app.route("/api/encabezado")
+    def api_encabezado():
+        # Fecha + clima del ENCABEZADO para auto-refrescar sin recargar la página
+        # (clima_data lo inyecta el context processor; cachea 15 min).
+        return jsonify({
+            "fecha": _fecha_es(datetime.now()),
+            "weather_html": render_template("_header_weather.html"),
+        })
+
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "GET" and get_modo_actual():

@@ -35,12 +35,8 @@
             <div class="app-header__brand">S<span>M</span>E</div>
             <img class="app-header__logo" src="{{ url_for('static', filename='img/logo_sauz_crema.svg') }}" alt="Motel Hacienda del Sauz">
             <div class="app-header__meta">
-                <span class="app-header__date">{{ fecha_actual }}</span>
-                <span class="app-header__weather">
-                    {%- from "_wx_icon.html" import wx_icon -%}
-                    {{ wx_icon(clima_data.categoria, 18, True, clima_data.es_dia if clima_data.es_dia is defined else True) }}
-                    {{ clima }}
-                </span>
+                <span class="app-header__date" id="app-header-date">{{ fecha_actual }}</span>
+                <span class="app-header__weather" id="app-header-weather">{% include "_header_weather.html" %}</span>
                 <div class="modo-indicator">
                     {% if es_admin %}
                     <span class="modo-badge modo-badge--admin">
@@ -169,6 +165,30 @@
         }
         tick();
         setInterval(tick, 1000);
+    })();
+    </script>
+
+    <script>
+    // Auto-refresco de fecha + clima del encabezado (sin recargar la página)
+    (function () {
+        var dateEl = document.getElementById('app-header-date');
+        var wxEl   = document.getElementById('app-header-weather');
+        if (!dateEl && !wxEl) return;
+        function refresh() {
+            fetch('/api/encabezado', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    if (!d) return;
+                    if (dateEl && d.fecha) dateEl.textContent = d.fecha;
+                    if (wxEl && d.weather_html) wxEl.innerHTML = d.weather_html;
+                })
+                .catch(function () {});
+        }
+        setInterval(refresh, 60000);
+        // Al volver a enfocar la pestaña, refrescar de inmediato
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) refresh();
+        });
     })();
     </script>
 

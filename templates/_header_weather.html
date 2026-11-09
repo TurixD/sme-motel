@@ -1,0 +1,5 @@
+{#- Contenido del clima en el encabezado (ícono + texto). Lo usan base.html y
+    el endpoint /api/encabezado para auto-refrescar sin recargar la página. -#}
+{%- from "_wx_icon.html" import wx_icon -%}
+{{ wx_icon(clima_data.categoria, 18, True, clima_data.es_dia if clima_data.es_dia is defined else True) }}
+{{ clima }}
