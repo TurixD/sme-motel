@@ -6,13 +6,15 @@
     <title>{% block title %}SME{% endblock %}</title>
 
     <!-- Instalación como app (Agregar a inicio en iOS/Android) -->
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}?v=2">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/icon_sauz.svg') }}?v=2">
+    <link rel="icon" type="image/png" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}?v=2">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon_32.png') }}?v=2">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="SME">
-    <meta name="theme-color" content="#0f0f12">
+    <meta name="theme-color" content="#0a4b49">
 
     <!-- Fuentes (SPEC 8.3): Inter + JetBrains Mono via Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
