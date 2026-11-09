@@ -4,6 +4,7 @@ configuracion.py - Módulo de configuración del sistema (SPEC §5.8 — Fase 1)
 
 import subprocess
 import sys
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -129,6 +130,12 @@ def index():
                 "FROM fondos WHERE activo=1 ORDER BY id"
             ).fetchall()
         ]
+        usuarios = [
+            dict(r) for r in db.execute(
+                "SELECT id, username, nombre_display, rol, avatar FROM usuarios "
+                "WHERE activo=1 ORDER BY rol DESC, nombre_display"
+            ).fetchall()
+        ]
 
     return render_template(
         "configuracion.html",
@@ -136,6 +143,7 @@ def index():
         gastos_fijos=gastos_fijos,
         turnos=turnos,
         fondos=fondos,
+        usuarios=usuarios,
         turnos_label=_TURNOS_LABEL,
         backup=_backup_info(),
         uso_ia=_uso_ia_mes(),
@@ -239,3 +247,80 @@ def api_backup():
     log_action("Backup manual ejecutado desde Configuración")
     info = _backup_info()
     return jsonify({"ok": True, "cantidad": info["cantidad"], "ultimo": info["ultimo"]})
+
+
+# ── API: foto de perfil de usuario (solo admin) ───────────────
+
+_AVATAR_EXT = {
+    "image/jpeg": "jpg",
+    "image/jpg":  "jpg",
+    "image/png":  "png",
+    "image/webp": "webp",
+    "image/gif":  "gif",
+}
+
+
+def _borrar_avatar_anterior(ruta_rel: str | None) -> None:
+    """Borra del disco un avatar subido previamente (si era archivo propio)."""
+    if ruta_rel and ruta_rel.startswith("img/avatars/"):
+        try:
+            (Config.BASE_DIR / "static" / ruta_rel).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+@configuracion_bp.route("/configuracion/api/usuario/<int:uid>/avatar", methods=["POST"])
+@solo_admin
+def api_usuario_avatar(uid):
+    if "imagen" not in request.files:
+        return jsonify({"ok": False, "error": "No se recibió ninguna imagen"}), 400
+
+    archivo = request.files["imagen"]
+    ext = _AVATAR_EXT.get((archivo.content_type or "").lower())
+    if not ext:
+        return jsonify({"ok": False, "error": "Formato no válido (usa JPG, PNG, WEBP o GIF)"}), 400
+
+    data_bytes = archivo.read()
+    if len(data_bytes) > 2 * 1024 * 1024:
+        return jsonify({
+            "ok": False,
+            "error": f"Imagen demasiado grande ({len(data_bytes) // 1024} KB). Máximo 2 MB.",
+        }), 400
+
+    with _db() as db:
+        usuario = db.execute(
+            "SELECT id, avatar, nombre_display FROM usuarios WHERE id=? AND activo=1", (uid,)
+        ).fetchone()
+        if not usuario:
+            return jsonify({"ok": False, "error": "Usuario no encontrado"}), 404
+
+        Config.AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+        nombre = f"u{uid}_{int(time.time())}.{ext}"
+        (Config.AVATARS_DIR / nombre).write_bytes(data_bytes)
+        ruta_rel = f"img/avatars/{nombre}"
+        anterior = usuario["avatar"]
+
+        db.execute("UPDATE usuarios SET avatar=? WHERE id=?", (ruta_rel, uid))
+        db.commit()
+
+    _borrar_avatar_anterior(anterior)
+    log_action("Avatar actualizado: usuario #%d (%s)", uid, usuario["nombre_display"])
+    return jsonify({"ok": True, "avatar_url": f"/static/{ruta_rel}"})
+
+
+@configuracion_bp.route("/configuracion/api/usuario/<int:uid>/avatar/quitar", methods=["POST"])
+@solo_admin
+def api_usuario_avatar_quitar(uid):
+    with _db() as db:
+        usuario = db.execute(
+            "SELECT avatar, nombre_display FROM usuarios WHERE id=? AND activo=1", (uid,)
+        ).fetchone()
+        if not usuario:
+            return jsonify({"ok": False, "error": "Usuario no encontrado"}), 404
+        anterior = usuario["avatar"]
+        db.execute("UPDATE usuarios SET avatar=NULL WHERE id=?", (uid,))
+        db.commit()
+
+    _borrar_avatar_anterior(anterior)
+    log_action("Avatar removido: usuario #%d (%s)", uid, usuario["nombre_display"])
+    return jsonify({"ok": True})

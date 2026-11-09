@@ -45,4 +45,5 @@ class Config:
     DB_PATH = BASE_DIR / "database" / "sme.db"
     UPLOADS_DIR = BASE_DIR / "uploads" / "recibos"
     RECIBOS_DIR = BASE_DIR / "database" / "recibos"
+    AVATARS_DIR = BASE_DIR / "static" / "img" / "avatars"  # fotos de perfil subidas
     LOGS_DIR = BASE_DIR / "logs"

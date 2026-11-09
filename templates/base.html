@@ -18,18 +18,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=M+PLUS+Rounded+1c:wght@400&display=swap" rel="stylesheet">
+    <!-- Fuentes del tema Hacienda del Sauz (muestra rediseño) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
 
     <!-- CSS de SME -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/banner.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/gerty.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tema_sauz.css') }}">
     {% block styles %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
     <div class="container">
         <header class="app-header">
             <div class="app-header__brand">S<span>M</span>E</div>
+            <img class="app-header__logo" src="{{ url_for('static', filename='img/logo_sauz_crema.svg') }}" alt="Motel Hacienda del Sauz">
             <div class="app-header__meta">
                 <span class="app-header__date">{{ fecha_actual }}</span>
                 <span class="app-header__weather">

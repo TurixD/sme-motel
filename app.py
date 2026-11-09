@@ -692,7 +692,7 @@ def create_app() -> Flask:
             conn.row_factory = sqlite3.Row
             usuarios = [
                 dict(row) for row in conn.execute(
-                    "SELECT id, username, nombre_display, rol FROM usuarios "
+                    "SELECT id, username, nombre_display, rol, avatar FROM usuarios "
                     "WHERE activo = 1 ORDER BY rol DESC, nombre_display"
                 ).fetchall()
             ]

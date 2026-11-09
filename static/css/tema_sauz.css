@@ -1,0 +1,545 @@
+/* ============================================================================
+   TEMA "Hacienda del Sauz" — MUESTRA de rediseño (solo visual)
+   ----------------------------------------------------------------------------
+   Todo está scopeado bajo `body.tema-sauz`, que hoy solo activa la pantalla de
+   Inicio (Cuartos / mostrador). Las demás pantallas NO se ven afectadas.
+   Variables en :root para reutilizar el tema en otras pantallas después.
+   Referencia: paquete-rediseno/referencia_inicio.html + GUIA_ESTILO.md
+   No cambia funcionalidad, rutas, Jinja, JS, IDs ni data-*. Gerty no se toca.
+   ========================================================================== */
+
+:root {
+    --sauz-bg-0:        #000a0c;
+    --sauz-grad:        radial-gradient(ellipse 70% 60% at 38% 22%,
+                            #0e5a57 0%, #08393b 38%, #031c1f 70%, #000a0c 100%);
+    --sauz-title:       #f7ebd0;   /* títulos serif */
+    --sauz-text:        #f2e9d6;   /* texto general */
+    --sauz-text-2:      #e6dcc6;   /* etiquetas */
+    --sauz-text-muted:  #c9c2b4;   /* horas / fechas en listas */
+    --sauz-turq:        #3ff0e6;   /* acento / activo */
+    --sauz-turq-link:   #7fe3df;   /* links */
+    --sauz-bd-panel:    rgba(70, 230, 222, .6);
+    --sauz-bd-soft:     rgba(94, 234, 226, .5);
+    --sauz-gold:        rgba(242, 199, 106, .55);
+    --sauz-chip-gold-bd:#f5b94a;
+    --sauz-chip-gold-tx:#ffd27a;
+    --sauz-panel-bg:    linear-gradient(180deg, rgba(14, 74, 76, .7), rgba(1, 18, 20, .9));
+    --sauz-row-bg:      rgba(0, 8, 10, .55);
+    --sauz-tile-bg:     linear-gradient(180deg, rgba(28, 100, 102, .9), rgba(2, 22, 24, .97));
+    --sauz-pill-bg:     rgba(0, 10, 12, .45);
+    --sauz-green:       #1f8a55;
+    --sauz-green-tx:    #e9fff2;
+    --sauz-serif:       'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --sauz-sans:        'Montserrat', system-ui, -apple-system, sans-serif;
+}
+
+/* Elementos opt-in: ocultos por defecto en TODAS las pantallas; el tema los
+   muestra. Así agregarlos al HTML compartido no afecta las demás vistas. */
+.app-header__logo       { display: none; }
+.mes-banner__flores-sauz { display: none; }
+
+/* ══════════════════════════════════════════════════════════ FONDO + TEXTURA */
+body.tema-sauz {
+    background-color: var(--sauz-bg-0);
+    background-image: var(--sauz-grad);
+    background-attachment: fixed;
+    color: var(--sauz-text);
+    font-family: var(--sauz-sans);
+}
+/* Sauce de fondo (izquierda) + viñeta en orillas, debajo del contenido */
+body.tema-sauz::before {
+    content: "";
+    position: fixed;
+    left: -90px; top: 250px;
+    width: 780px; height: 700px;
+    background: url("../img/sauce_fondo.svg") no-repeat center / contain;
+    opacity: .08;
+    pointer-events: none;
+    z-index: -1;
+}
+body.tema-sauz::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse 85% 80% at 50% 40%,
+                transparent 55%, rgba(0, 0, 0, .6) 100%);
+    z-index: -1;
+}
+body.tema-sauz .container { position: relative; z-index: 1; }
+
+/* ════════════════════════════════════════════════════════════════ HEADER */
+body.tema-sauz .app-header__brand { display: none; }
+body.tema-sauz .app-header__logo {
+    display: block;
+    width: 84px; height: auto;
+    object-fit: contain;
+    filter: sepia(.6) saturate(1.6) brightness(1.05);
+}
+body.tema-sauz .app-header__meta { color: var(--sauz-text); gap: var(--space-4); }
+body.tema-sauz .app-header__date {
+    border: 1px solid var(--sauz-bd-soft);
+    border-radius: 999px;
+    background: var(--sauz-pill-bg);
+    padding: 10px 20px;
+    color: var(--sauz-text);
+    font-size: 15px;
+}
+body.tema-sauz .app-header__weather {
+    border: 1px solid var(--sauz-bd-soft);
+    border-radius: 999px;
+    background: var(--sauz-pill-bg);
+    color: var(--sauz-text);
+    padding: 9px 18px;
+    font-size: 15px;
+}
+body.tema-sauz .modo-badge--admin {
+    background: rgba(110, 80, 220, .28);
+    border: 1px solid rgba(150, 120, 255, .65);
+    color: #e4dcff;
+    font-size: 15px;
+    padding: 7px 16px;
+}
+body.tema-sauz .modo-badge--empleado {
+    background: var(--sauz-pill-bg);
+    border: 1px solid var(--sauz-bd-soft);
+    color: var(--sauz-text);
+    font-size: 15px;
+    padding: 7px 16px;
+}
+body.tema-sauz .modo-btn {
+    border: 1px solid var(--sauz-bd-soft);
+    border-radius: 999px;
+    background: var(--sauz-pill-bg);
+    color: var(--sauz-text);
+    min-height: 44px;
+    padding: 0 20px;
+    font-family: var(--sauz-sans);
+    font-size: 15px;
+}
+body.tema-sauz .modo-btn:hover { color: #fff; border-color: var(--sauz-turq); }
+
+/* ════════════════════════════════════════════════════════ BANNER DEL MES */
+/* La guirnalda (papel picado) se queda tal cual. Solo cambian tipografía,
+   colores y las flores (por las de la referencia). */
+body.tema-sauz .mes-banner__mes {
+    font-family: var(--sauz-serif);
+    font-weight: 500;
+    font-size: clamp(54px, 11vw, 108px);
+    line-height: .95;
+    letter-spacing: .02em;
+    color: var(--sauz-title);
+    transform: scaleX(1.12);
+    transform-origin: left center;
+}
+body.tema-sauz .mes-banner__anio {
+    font-family: var(--sauz-serif);
+    font-size: 26px;
+    color: var(--sauz-text);
+}
+/* El tag trae color/borde inline desde la plantilla → requiere !important */
+body.tema-sauz .mes-banner__tag {
+    border-color: var(--sauz-chip-gold-bd) !important;
+    color: var(--sauz-chip-gold-tx) !important;
+    background: rgba(245, 185, 74, .12);
+    font-size: 15px;
+    padding: 5px 16px;
+}
+/* Flores de la referencia en lugar del decorado del mes */
+body.tema-sauz .mes-banner__deco > svg:not(.mes-banner__flores-sauz) { display: none; }
+body.tema-sauz .mes-banner__flores-sauz {
+    display: block;
+    width: 200px; height: 124px;
+    margin-left: auto;
+}
+body.tema-sauz .mes-banner__deco { bottom: 18px; right: 8px; }
+
+/* ═══════════════════════════════════════════════ TÍTULO "Cuartos" + botón */
+body.tema-sauz .page-header--cuartos .page-title {
+    font-family: var(--sauz-serif);
+    font-weight: 500;
+    font-size: 36px;
+    color: var(--sauz-title);
+}
+/* Botones fantasma como pastilla (Cortes de turno, Cancelar, etc.) */
+body.tema-sauz .btn--ghost {
+    border: 1px solid var(--sauz-bd-soft);
+    border-radius: 999px;
+    background: var(--sauz-pill-bg);
+    color: var(--sauz-text);
+}
+body.tema-sauz .btn--ghost:hover { color: #fff; border-color: var(--sauz-turq); }
+/* "Ver historial completo" es un link, no pastilla */
+body.tema-sauz .actividad-header .btn--ghost {
+    border: none;
+    background: transparent;
+    color: var(--sauz-turq-link);
+    padding: 0;
+}
+
+/* ═══════════════════════════════════════════ BARRA "Cuartos rentados" */
+body.tema-sauz .contador-rentas {
+    border: 1.5px solid var(--sauz-bd-panel);
+    border-radius: 18px;
+    background: var(--sauz-panel-bg);
+    padding: 16px 22px;
+    color: var(--sauz-text-2);
+    font-size: 18px;
+}
+body.tema-sauz .contador-rentas__label { color: #f3ecdc; font-weight: 600; }
+body.tema-sauz .contador-rentas__item  { color: var(--sauz-text-2); }
+body.tema-sauz .contador-rentas b       { color: #fff; }
+body.tema-sauz .contador-rentas__sep    { color: var(--sauz-gold); }
+
+/* ═══════════════════════════════════════════════════ GRUPOS + TILES */
+body.tema-sauz .cuartos-group__label {
+    font-family: var(--sauz-sans);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--sauz-title);
+}
+body.tema-sauz .cuarto-card {
+    border: 1px solid var(--sauz-bd-soft);
+    border-radius: 16px;
+    background: var(--sauz-tile-bg);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .55);
+    color: #fff;
+}
+body.tema-sauz .cuarto-card__icon { stroke: var(--sauz-title); color: var(--sauz-title); }
+body.tema-sauz .cuarto-card__num  { color: #fff; }
+body.tema-sauz .cuarto-card__tipo { color: #efe5cf; }
+
+/* ═══════════════════════════════════════════════ PANEL ACTIVIDAD DEL DÍA */
+body.tema-sauz .actividad-section {
+    border: 1.5px solid var(--sauz-bd-panel);
+    border-radius: 22px;
+    background: var(--sauz-panel-bg);
+    padding: 20px 20px 22px;
+}
+body.tema-sauz .actividad-title {
+    font-family: var(--sauz-serif);
+    font-weight: 500;
+    font-size: 30px;
+    color: var(--sauz-title);
+}
+body.tema-sauz .feed-list { border: none; background: transparent; }
+body.tema-sauz .feed-item {
+    background: var(--sauz-row-bg);
+    border: 1px solid rgba(255, 255, 255, .06);
+    border-radius: 14px;
+    padding: 14px 16px;
+}
+body.tema-sauz .feed-item__hora {
+    color: var(--sauz-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+body.tema-sauz .feed-item__tipo {
+    background: var(--sauz-green);
+    color: var(--sauz-green-tx);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-weight: 500;
+}
+body.tema-sauz .feed-item__desc  { color: var(--sauz-text); }
+body.tema-sauz .feed-item__monto { color: #fff; font-weight: 600; }
+body.tema-sauz .feed-empty       { color: var(--sauz-text-muted); }
+
+/* ══════════════════════════════════════════════════ BARRA DE NAVEGACIÓN */
+body.tema-sauz .bottom-nav {
+    border: 1.5px solid var(--sauz-bd-panel);
+    background: rgba(1, 14, 16, .92);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .35);
+}
+body.tema-sauz .bottom-nav__item { color: var(--sauz-title); }
+body.tema-sauz .bottom-nav__item:hover {
+    background: rgba(255, 255, 255, .06);
+    color: #fff;
+}
+body.tema-sauz .bottom-nav__item.is-active {
+    background: transparent;
+    color: var(--sauz-turq);
+    border-radius: 10px;
+    box-shadow: inset 0 -3px 0 var(--sauz-turq);
+}
+
+/* ═══════════════════════════════════════════════════ GERTY + RELOJ */
+/* Gerty se queda abajo-derecha (como está por defecto). El reloj va DEBAJO
+   de Gerty, anclado abajo-derecha. Se neutraliza el override ≥1100 que movía
+   a Gerty a la esquina superior. Gerty no cambia de tamaño ni comportamiento. */
+body.tema-sauz .gerty-widget {
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: 20px !important;
+    bottom: 118px !important;
+    z-index: 70;
+}
+body.tema-sauz .lock-clock {
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: 24px !important;
+    bottom: 34px !important;
+    display: block !important;
+    z-index: 71;
+}
+body.tema-sauz .lock-clock__time {
+    font-family: var(--sauz-serif) !important;
+    font-weight: 600 !important;
+    font-size: 3.2rem !important;
+    color: #fff !important;
+}
+body.tema-sauz .lock-clock__ampm { color: var(--sauz-text) !important; }
+
+/* ══════════════════════════════════════════ MODALES / INPUTS / BOTONES */
+body.tema-sauz .modal-overlay { background: rgba(0, 0, 0, .6); }
+body.tema-sauz .modal-card {
+    border: 1.5px solid var(--sauz-bd-panel);
+    border-radius: 22px;
+    background: var(--sauz-panel-bg);
+    color: var(--sauz-text);
+}
+body.tema-sauz .modal-card__title {
+    font-family: var(--sauz-serif);
+    font-weight: 500;
+    color: var(--sauz-title);
+}
+body.tema-sauz .form-label { color: var(--sauz-text-2); }
+body.tema-sauz .form-input,
+body.tema-sauz .form-select,
+body.tema-sauz .form-textarea {
+    background: var(--sauz-pill-bg);
+    border: 1px solid var(--sauz-bd-soft);
+    border-radius: 12px;
+    color: var(--sauz-text);
+}
+body.tema-sauz .form-input:focus,
+body.tema-sauz .form-select:focus,
+body.tema-sauz .form-textarea:focus {
+    outline: 2px solid var(--sauz-turq);
+    outline-offset: 1px;
+}
+body.tema-sauz .btn--primary {
+    background: var(--sauz-turq);
+    border: 1px solid var(--sauz-turq);
+    color: #04231f;
+    font-weight: 600;
+}
+body.tema-sauz .btn--primary:hover { background: #5ff6ed; border-color: #5ff6ed; }
+body.tema-sauz .dur-btn {
+    border: 1px solid var(--sauz-bd-soft);
+    background: var(--sauz-pill-bg);
+    color: var(--sauz-text);
+    border-radius: 12px;
+}
+body.tema-sauz .dur-btn--active {
+    border-color: var(--sauz-turq);
+    color: #fff;
+    background: rgba(63, 240, 230, .14);
+}
+body.tema-sauz .toast {
+    background: var(--sauz-panel-bg);
+    border: 1.5px solid var(--sauz-bd-panel);
+    color: var(--sauz-text);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CAPA GENÉRICA — resto de pantallas (dashboard, cortes, ingresos, gastos,
+   inventario, empleados, reportes, fondos, configuración, historiales).
+   Da coherencia sobre el fondo verde sin tocar la estructura.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Títulos de página y sección */
+body.tema-sauz .page-title,
+body.tema-sauz .section-title,
+body.tema-sauz .historico-title {
+    font-family: var(--sauz-serif);
+    font-weight: 500;
+    color: var(--sauz-title);
+}
+body.tema-sauz .page-subtitle { color: var(--sauz-text-muted); }
+
+/* Tarjetas / paneles */
+body.tema-sauz .card {
+    background: var(--sauz-panel-bg);
+    border: 1.5px solid var(--sauz-bd-panel);
+    border-radius: 18px;
+    color: var(--sauz-text);
+}
+body.tema-sauz .card__label { color: var(--sauz-text-2); }
+body.tema-sauz .card__value { color: var(--sauz-title); }
+
+/* Tablas: sin fondos claros, encabezado estilo etiqueta, filas con divisor sutil */
+body.tema-sauz .tabla,
+body.tema-sauz .cortes-tabla,
+body.tema-sauz .historial-tabla,
+body.tema-sauz .conteo-tabla,
+body.tema-sauz .shift-table,
+body.tema-sauz .desglose-table,
+body.tema-sauz .cal-table {
+    color: var(--sauz-text);
+    background: transparent;
+}
+body.tema-sauz .tabla thead th,
+body.tema-sauz .cortes-tabla thead th,
+body.tema-sauz .historial-tabla thead th,
+body.tema-sauz .conteo-tabla thead th,
+body.tema-sauz .shift-table thead th,
+body.tema-sauz .desglose-table thead th,
+body.tema-sauz .cal-table thead th {
+    color: var(--sauz-text-2);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-size: 13px;
+    border-bottom: 1px solid var(--sauz-gold);
+    background: transparent;
+}
+body.tema-sauz .tabla td,
+body.tema-sauz .tabla th,
+body.tema-sauz .cortes-tabla td,
+body.tema-sauz .historial-tabla td,
+body.tema-sauz .conteo-tabla td,
+body.tema-sauz .shift-table td,
+body.tema-sauz .desglose-table td,
+body.tema-sauz .cal-table td {
+    border-color: rgba(255, 255, 255, .08);
+    background: transparent;
+}
+body.tema-sauz .tabla tbody tr:hover td,
+body.tema-sauz .cortes-tabla tbody tr:hover td,
+body.tema-sauz .historial-tabla tbody tr:hover td {
+    background: rgba(255, 255, 255, .04);
+}
+body.tema-sauz .tabla-muted { color: var(--sauz-text-muted); }
+body.tema-sauz .tabla-total td { color: var(--sauz-title); font-weight: 600; }
+body.tema-sauz .mono { font-variant-numeric: tabular-nums; }
+body.tema-sauz .text-accent { color: var(--sauz-turq) !important; }
+
+/* Filtros / formularios en línea */
+body.tema-sauz .form-input--sm,
+body.tema-sauz .form-select--sm {
+    background: var(--sauz-pill-bg);
+    border: 1px solid var(--sauz-bd-soft);
+    color: var(--sauz-text);
+}
+
+/* Botón peligro / anular */
+body.tema-sauz .btn--danger {
+    background: transparent;
+    border: 1px solid rgba(255, 122, 138, .6);
+    color: #ff9aa6;
+    border-radius: 999px;
+}
+body.tema-sauz .btn--danger:hover { background: rgba(255, 122, 138, .12); color: #ffb3bd; }
+
+/* Notas vacías */
+body.tema-sauz .empty-note,
+body.tema-sauz .empty-state,
+body.tema-sauz .placeholder-tag { color: var(--sauz-text-muted); }
+
+/* Links */
+body.tema-sauz a { color: var(--sauz-turq-link); }
+
+/* Paginación / hints */
+body.tema-sauz .pag-info,
+body.tema-sauz .corte-ventana-hint,
+body.tema-sauz .form-hint { color: var(--sauz-text-muted); }
+
+/* ══════════════════════════════════════ LOGIN (pantalla aparte) ══════════ */
+body.tema-sauz .login-logo {
+    width: 128px; height: auto;
+    object-fit: contain;
+    filter: sepia(.6) saturate(1.6) brightness(1.05);
+    margin-bottom: var(--space-3);
+}
+body.tema-sauz .login-brand { display: none; }
+/* El logo ya muestra "Motel Hacienda del Sauz"; se oculta el subtítulo repetido */
+body.tema-sauz .login-subtitle { display: none; }
+body.tema-sauz .login-question {
+    font-family: var(--sauz-serif);
+    font-weight: 500;
+    font-size: 34px;
+    color: var(--sauz-title);
+}
+body.tema-sauz .profile-name,
+body.tema-sauz .selected-name { color: var(--sauz-text); }
+body.tema-sauz .profile-avatar { border: 2px solid rgba(94, 234, 226, .35); }
+/* Avatar "Mostrador": logo nuevo centrado (en vez de la foto anterior) */
+body.tema-sauz .profile-avatar[data-user="empleado"] { background: var(--sauz-tile-bg); }
+body.tema-sauz .profile-avatar__logo {
+    box-sizing: border-box;
+    object-fit: contain;
+    padding: 15%;
+    background: transparent;
+    filter: sepia(.6) saturate(1.6) brightness(1.05);
+}
+body.tema-sauz .profile-card:hover .profile-avatar,
+body.tema-sauz .profile-card:focus-visible .profile-avatar {
+    box-shadow: 0 6px 24px rgba(63, 240, 230, .4);
+}
+body.tema-sauz #step-password input[type="password"] {
+    background: var(--sauz-pill-bg);
+    border: 1px solid var(--sauz-bd-soft);
+    border-radius: 999px;
+    color: var(--sauz-text);
+}
+body.tema-sauz #step-password input[type="password"]:focus {
+    outline: 2px solid var(--sauz-turq);
+    border-color: var(--sauz-turq);
+}
+body.tema-sauz .login-submit {
+    background: var(--sauz-turq);
+    color: #04231f;
+    border-radius: 999px;
+    font-family: var(--sauz-sans);
+    font-weight: 600;
+}
+body.tema-sauz .login-submit:hover { opacity: 1; background: #5ff6ed; }
+body.tema-sauz .login-link-btn { color: var(--sauz-turq-link); font-family: var(--sauz-sans); }
+body.tema-sauz .login-link-btn:hover { color: #fff; }
+body.tema-sauz .login-firma { color: var(--sauz-text-muted); }
+body.tema-sauz .login-error {
+    background: rgba(255, 122, 138, .12);
+    border: 1px solid rgba(255, 122, 138, .4);
+    color: #ff9aa6;
+    border-radius: 12px;
+}
+
+/* ══════════════════════════ Fotos de perfil (Configuración) ══════════════ */
+body.tema-sauz .btn--config {
+    border: 1px solid var(--sauz-bd-soft);
+    background: var(--sauz-pill-bg);
+    color: var(--sauz-text);
+    border-radius: 999px;
+}
+body.tema-sauz .btn--config:hover { border-color: var(--sauz-turq); color: #fff; }
+body.tema-sauz .config-perfiles-note { color: var(--sauz-text-muted); margin: 0 0 16px; font-size: 14px; }
+body.tema-sauz .perfiles-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+body.tema-sauz .perfil-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px; border-radius: 16px;
+    border: 1px solid var(--sauz-bd-soft);
+    background: var(--sauz-row-bg);
+    min-width: 300px; flex: 1 1 300px; max-width: 420px;
+}
+body.tema-sauz .perfil-item__avatar {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0;
+    background: var(--sauz-tile-bg);
+    border: 2px solid rgba(94, 234, 226, .35);
+    color: #fff; font-weight: 700; font-size: 26px;
+}
+body.tema-sauz .perfil-item__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+body.tema-sauz .perfil-item__avatar .perfil-item__logo {
+    object-fit: contain; padding: 15%; box-sizing: border-box;
+    filter: sepia(.6) saturate(1.6) brightness(1.05);
+}
+body.tema-sauz .perfil-item__info { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+body.tema-sauz .perfil-item__name { color: var(--sauz-title); font-weight: 600; }
+body.tema-sauz .perfil-item__rol  { color: var(--sauz-text-muted); font-size: 13px; }
+body.tema-sauz .perfil-item__actions { display: flex; flex-direction: column; gap: 6px; }
+
+/* En celular el layout sigue como hoy (una columna); solo cambian colores. */

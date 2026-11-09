@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% block body_class %}tema-sauz{% endblock %}
+
 {% block title %}Configuración — SME{% endblock %}
 
 {% block styles %}
@@ -393,6 +395,48 @@
         </div>
     </div>
 
+<!-- ── 8. Fotos de perfil ────────────────────────────────── -->
+    <div class="accordion-item" id="acc-perfiles">
+        <button class="accordion-header" id="btn-acc-perfiles"
+                aria-expanded="false" aria-controls="panel-perfiles">
+            <span class="accordion-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Fotos de perfil
+            </span>
+            <svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="accordion-panel" id="panel-perfiles" role="region" aria-labelledby="btn-acc-perfiles">
+            <div class="accordion-body">
+                <p class="config-perfiles-note">Cambia la foto que aparece en la pantalla de inicio de sesión. Solo administradores. JPG, PNG, WEBP o GIF · máx. 2 MB.</p>
+                <div class="perfiles-grid">
+                    {% for u in usuarios %}
+                    <div class="perfil-item" data-uid="{{ u.id }}">
+                        <div class="perfil-item__avatar" id="perfil-avatar-{{ u.id }}" data-user="{{ u.username }}">
+                            {% if u.avatar %}
+                            <img src="{{ url_for('static', filename=u.avatar) }}" alt="{{ u.nombre_display }}">
+                            {% elif u.username == 'empleado' %}
+                            <img src="{{ url_for('static', filename='img/logo_sauz_crema.svg') }}" alt="Mostrador" class="perfil-item__logo">
+                            {% else %}
+                            <span class="perfil-item__inicial">{{ u.nombre_display[0]|upper }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="perfil-item__info">
+                            <span class="perfil-item__name">{{ u.nombre_display }}</span>
+                            <span class="perfil-item__rol">{{ 'Administrador' if u.rol == 'admin' else 'Mostrador' }}</span>
+                        </div>
+                        <div class="perfil-item__actions">
+                            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif"
+                                   id="perfil-file-{{ u.id }}" class="perfil-file" hidden>
+                            <button class="btn btn--config btn--sm" data-act="cambiar" data-uid="{{ u.id }}">Cambiar foto</button>
+                            <button class="btn btn--ghost btn--sm" data-act="quitar" data-uid="{{ u.id }}" {% if not u.avatar %}hidden{% endif %}>Quitar</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div><!-- /accordion -->
 
 <div id="toast-container"></div>
@@ -518,6 +562,70 @@
             });
         });
     }
+
+    // ── Fotos de perfil (solo admin) ──────────────────────────
+    document.querySelectorAll('.perfil-item').forEach(function (item) {
+        var uid    = item.dataset.uid;
+        var file   = document.getElementById('perfil-file-' + uid);
+        var btnCam = item.querySelector('[data-act="cambiar"]');
+        var btnQui = item.querySelector('[data-act="quitar"]');
+        var box    = document.getElementById('perfil-avatar-' + uid);
+
+        if (btnCam && file) {
+            btnCam.addEventListener('click', function () { file.click(); });
+            file.addEventListener('change', function () {
+                var f = file.files && file.files[0];
+                if (!f) return;
+                if (f.size > 2 * 1024 * 1024) {
+                    showToast('Imagen muy grande (máx. 2 MB)', 'error'); file.value = ''; return;
+                }
+                var fd = new FormData();
+                fd.append('imagen', f);
+                btnCam.disabled = true; btnCam.textContent = 'Subiendo…';
+                fetch('/configuracion/api/usuario/' + uid + '/avatar', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    btnCam.disabled = false; btnCam.textContent = 'Cambiar foto';
+                    if (data.ok) {
+                        if (box) box.innerHTML = '<img src="' + data.avatar_url + '" alt="">';
+                        if (btnQui) btnQui.hidden = false;
+                        showToast('Foto actualizada', 'success');
+                    } else {
+                        showToast(data.error || 'Error al subir', 'error');
+                    }
+                    file.value = '';
+                })
+                .catch(function () {
+                    btnCam.disabled = false; btnCam.textContent = 'Cambiar foto';
+                    showToast('Error de red', 'error');
+                });
+            });
+        }
+
+        if (btnQui) {
+            btnQui.addEventListener('click', function () {
+                if (!confirm('¿Quitar la foto de perfil?')) return;
+                fetch('/configuracion/api/usuario/' + uid + '/avatar/quitar', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.ok) { showToast(data.error || 'Error', 'error'); return; }
+                    var user = box ? box.dataset.user : '';
+                    if (box) {
+                        if (user === 'empleado') {
+                            box.innerHTML = '<img src="/static/img/logo_sauz_crema.svg" alt="Mostrador" class="perfil-item__logo">';
+                        } else {
+                            var nm = item.querySelector('.perfil-item__name');
+                            var ini = (nm ? nm.textContent.trim().charAt(0) : '?') || '?';
+                            box.innerHTML = '<span class="perfil-item__inicial">' + ini.toUpperCase() + '</span>';
+                        }
+                    }
+                    btnQui.hidden = true;
+                    showToast('Foto removida', 'success');
+                })
+                .catch(function () { showToast('Error de red', 'error'); });
+            });
+        }
+    });
 }());
 </script>
 {% endblock %}

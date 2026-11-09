@@ -354,7 +354,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
     password_hash  TEXT    NOT NULL,
     nombre_display TEXT    NOT NULL,                     -- 'Turi' | 'Gabriel' | 'Mostrador'
     rol            TEXT    NOT NULL DEFAULT 'admin',     -- 'admin' | 'empleado'
-    activo         INTEGER NOT NULL DEFAULT 1            -- boolean
+    activo         INTEGER NOT NULL DEFAULT 1,           -- boolean
+    avatar         TEXT                                  -- ruta foto de perfil (rel. a /static); NULL = default
 );
 
 -- -------------------------------------------------------------

@@ -314,7 +314,8 @@ def migrar() -> None:
                     password_hash  TEXT    NOT NULL,
                     nombre_display TEXT    NOT NULL,
                     rol            TEXT    NOT NULL DEFAULT 'admin',   -- 'admin' | 'empleado'
-                    activo         INTEGER NOT NULL DEFAULT 1
+                    activo         INTEGER NOT NULL DEFAULT 1,
+                    avatar         TEXT                                -- foto de perfil (rel. a /static)
                 )
             """)
             for uname, display in [("turi", "Turi"), ("gabriel", "Gabriel")]:
@@ -347,6 +348,15 @@ def migrar() -> None:
                 )
                 migraciones += 1
                 print("  usuarios: usuario 'empleado' (Mostrador) creado, rol=empleado, pass 'mostrador123' (v2.5)")
+
+        # v2.6 — usuarios.avatar (foto de perfil personalizada; NULL = default)
+        if "usuarios" in {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
+            cols_u = {r[1] for r in conn.execute("PRAGMA table_info(usuarios)").fetchall()}
+            if "avatar" not in cols_u:
+                conn.execute("ALTER TABLE usuarios ADD COLUMN avatar TEXT")
+                migraciones += 1
+                print("  usuarios: columna 'avatar' agregada (v2.6)")
 
         # v2.0 — clave modo_actual en configuracion
         existe_modo = conn.execute(

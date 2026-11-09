@@ -16,17 +16,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tema_sauz.css') }}">
 </head>
-<body>
+<body class="tema-sauz">
+    <img class="login-logo" src="{{ url_for('static', filename='img/logo_sauz_crema.svg') }}" alt="Motel Hacienda del Sauz">
     <div class="login-brand">S<span>M</span>E</div>
     <p class="login-subtitle">Motel Hacienda Del Sauz</p>
 
     <!-- PASO 1: grilla de perfiles -->
     <section id="step-profiles" class="login-step">
-        <h1 class="login-question">¿Quién está usando SME?</h1>
+        <h1 class="login-question">Bienvenido, ¿quién entra hoy?</h1>
 
         <div class="profile-grid">
             {% for u in usuarios %}
@@ -39,8 +42,10 @@
                  onclick="seleccionarPerfil(this)"
                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();seleccionarPerfil(this)}">
                 <div class="profile-avatar profile-avatar--md" data-user="{{ u.username }}" data-color-index="{{ loop.index0 }}">
-                    {% if u.username == 'empleado' %}
-                    <img src="{{ url_for('static', filename='img/perfil_mostrador.jpg') }}" alt="Mostrador" class="profile-avatar__img">
+                    {% if u.avatar %}
+                    <img src="{{ url_for('static', filename=u.avatar) }}" alt="{{ u.nombre_display }}" class="profile-avatar__img">
+                    {% elif u.username == 'empleado' %}
+                    <img src="{{ url_for('static', filename='img/logo_sauz_crema.svg') }}" alt="Mostrador" class="profile-avatar__img profile-avatar__logo">
                     {% else %}
                     {{ u.nombre_display[0]|upper }}
                     {% endif %}
@@ -101,8 +106,10 @@
             const avatar = document.getElementById('selected-avatar');
             avatar.dataset.user = usuario.username;
             avatar.dataset.colorIndex = colorIndex;
-            if (usuario.username === 'empleado') {
-                avatar.innerHTML = '<img src="/static/img/perfil_mostrador.jpg" alt="Mostrador" class="profile-avatar__img">';
+            if (usuario.avatar) {
+                avatar.innerHTML = '<img src="/static/' + usuario.avatar + '" alt="" class="profile-avatar__img">';
+            } else if (usuario.username === 'empleado') {
+                avatar.innerHTML = '<img src="/static/img/logo_sauz_crema.svg" alt="Mostrador" class="profile-avatar__img profile-avatar__logo">';
             } else {
                 avatar.textContent = usuario.nombre_display[0].toUpperCase();
             }

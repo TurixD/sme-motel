@@ -49,3 +49,5 @@ desktop.ini
 *.db-journal
 *.db-wal
 *.db-shm
+# Fotos de perfil subidas (datos de usuario, no versionar)
+static/img/avatars/
